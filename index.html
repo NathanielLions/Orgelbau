@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wurlitzer 165/166 Master Editor (v23)</title>
+    <title>Wurlitzer 165/166 Master Editor (v25)</title>
     <script src="https://unpkg.com/@tonejs/midi"></script>
     <style>
         /* CSS VARIABLES FOR LIGHT/DARK MODE */
@@ -69,7 +69,7 @@
 
         .controls-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 10px; }
         .nudge-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap;}
-        .nudge-btn { background: var(--table-header); color: var(--text-color); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9em; transition: 0.2s;}
+        .nudge-btn { background: var(--table-header); color: var(--text-color); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9em; transition: 0.2s; box-sizing: border-box;}
         .nudge-btn:hover { filter: brightness(0.9); }
 
         .zoom-group { display: flex; align-items: center; gap: 5px; background: var(--manual-bg); padding: 6px 12px; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.9em;}
@@ -89,7 +89,7 @@
 
         /* Horizontal Layout for Registration Groups */
         .registration-flex { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-start; }
-        .manual-group { border-left: 4px solid var(--border-color); padding-left: 10px; background: var(--manual-bg); padding-top: 10px; padding-bottom: 10px; border-radius: 0 5px 5px 0; width: 100%; box-sizing: border-box; }
+        .manual-group { border-left: 4px solid var(--border-color); padding: 10px; background: var(--manual-bg); border-radius: 0 5px 5px 0; width: 100%; box-sizing: border-box; }
         .manual-group h4 { margin: 0 0 10px 0; font-size: 1em; text-transform: uppercase; letter-spacing: 0.5px; }
         
         .stop-grid { display: flex; flex-direction: column; gap: 8px; }
@@ -225,7 +225,7 @@
     let isUpdatingSwitches = false; 
     
     let hiddenChannels = new Set();
-    let pistonsAffectPercussion = false; // By default, pistons ignore percussion!
+    let pistonsAffectPercussion = false;
 
     // DYNAMIC VARIABLES FOR SETTINGS
     let swellCC = 11;
@@ -273,7 +273,7 @@
         ]
     };
 
-    // PISTONS (PRESETS) ENGINE - Piston 7 is now the designated General Cancel
+    // PISTONS (PRESETS) ENGINE - Including Percussion (10) in safety net
     let pistons = [
         { name: "Pianissimo", activeStops: [15, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
         { name: "Forte", activeStops: [15, 40, 82, 73, 75, 11, 70, 79, 68, 56, 58, 43], swell: 127 },
@@ -281,7 +281,7 @@
         { name: "Piston 4", activeStops: [], swell: 64 },
         { name: "Piston 5", activeStops: [], swell: 64 },
         { name: "Piston 6", activeStops: [], swell: 64 },
-        { name: "General Cancel", activeStops: [15, 11, 70, 68, 58], swell: 64 } 
+        { name: "General Cancel", activeStops: [15, 11, 70, 68, 58, 10], swell: 64 } 
     ];
 
     function toggleDarkMode(isDark) {
@@ -441,15 +441,14 @@
         `;
         document.getElementById('col-bass-exp').appendChild(expDiv);
 
-        // PISTONS COLUMN (Includes Piston 7 / General Cancel)
+        // PISTONS COLUMN
         let pistonsHtml = `
             <div class="manual-group" style="border-left-color: #f39c12; flex: 1;">
                 <h4 style="color: #f39c12;">Saved Pistons</h4>
                 <div class="stop-grid" style="gap: 5px;">`;
         
         pistons.forEach((p, i) => {
-            // Adds slightly more top margin to Piston 7 to separate it as the standard Cancel piston
-            let extraStyle = i === 6 ? "margin-top: 15px;" : "";
+            let extraStyle = i === 6 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
             pistonsHtml += `<button class="nudge-btn" style="width: 100%; text-align: left; padding: 10px; font-size: 1em; ${extraStyle}" onclick="applyRegistrationState(pistons[${i}].activeStops, pistons[${i}].swell)">${p.name}</button>`;
         });
         
@@ -647,7 +646,6 @@
         });
     }
 
-    // BULK REGISTRATION STATE (PISTONS & CANCEL)
     function applyRegistrationState(activeStopsArr, swellVal) {
         if (!currentMidi) return alert("Please load a MIDI file first!");
         
@@ -673,9 +671,7 @@
         let allOrganCCs = Object.values(organStructure).flat().map(s => s.val);
         allOrganCCs.push(percCC);
 
-        let currentOffset = 0; // Stagger slightly
-
-        // Apply Swell
+        // Apply Swell (Fixed strictly to baseTick)
         if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
         track.controlChanges[swellCC].push({
             ticks: baseTick, 
@@ -683,23 +679,21 @@
             value: swellVal / 127, 
             time: currentMidi.header.ticksToSeconds(baseTick)
         });
-        currentOffset++;
 
-        // Apply Stops
+        // Apply Stops (Fixed strictly to baseTick so UI syncs instantly)
         allOrganCCs.forEach(val => {
-            if (!pistonsAffectPercussion && val === percCC) return; // Skip percussion if setting requires it
+            if (!pistonsAffectPercussion && val === percCC) return;
 
             let turnOn = activeStopsArr.includes(val);
             let targetCC = turnOn ? 81 : 80;
             
             if (!track.controlChanges[targetCC]) track.controlChanges[targetCC] = [];
             track.controlChanges[targetCC].push({
-                ticks: baseTick + currentOffset,
+                ticks: baseTick,
                 number: targetCC,
                 value: val / 127,
-                time: currentMidi.header.ticksToSeconds(baseTick + currentOffset)
+                time: currentMidi.header.ticksToSeconds(baseTick)
             });
-            currentOffset++;
         });
 
         [swellCC, 80, 81].forEach(cc => {
@@ -895,7 +889,7 @@
         const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" });
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = fileName + "_WurlitzerReady.mid";
+        a.download = fileName + "_Mapped.mid";
         a.click();
     }
 </script>
