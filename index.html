@@ -238,9 +238,9 @@
             const arrayBuffer = await response.arrayBuffer();
             // NOTE: Parsing raw SF2 requires a bundled external library like SpessaSynth.
             // Below, the Native WebAudio Synthesizer simulates the mapping flawlessly!
-            document.getElementById('audio-status').innerText = "✅ SF2 Fetched. Native Engine Ready.";
+            document.getElementById('audio-status').innerText = "Coming soon";
         } catch (err) {
-            document.getElementById('audio-status').innerText = "⚠️ SF2 Not Found (Localhost needed). Native Engine Ready.";
+            document.getElementById('audio-status').innerText = "Coming soon";
         }
     }
     window.onload = fetchSoundfont;
