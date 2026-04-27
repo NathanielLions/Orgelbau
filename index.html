@@ -352,75 +352,46 @@ document.getElementById('sf2-upload').addEventListener('change', async (event) =
         requestAnimationFrame(scheduler);
     }
 
-    function getActiveStopsForChannel(channel) {
-        let activeStops = [];
-        for (const [manual, stops] of Object.entries(organStructure)) {
-            let match = manual.match(/Ch (\d+)/);
-            if (match) {
-                let rawChannel = parseInt(match[1]) - 1; 
-                if (rawChannel === channel) {
-                    stops.forEach(s => {
-                        let cb = document.getElementById(`stop-${s.val}`);
-                        if (cb && cb.checked) activeStops.push(s);
-                    });
-                }
-            }
-        }
-        return activeStops;
-    }
-
-    function scheduleNotePlay(note, delaySeconds) {
+function scheduleNotePlay(note, delaySeconds) {
         let playTime = audioCtx.currentTime + delaySeconds;
         let activeStops = getActiveStopsForChannel(note.channel);
         
-        if (activeStops.length === 0) return; // Muted if no stops active!
-      function scheduleNotePlay(note, delaySeconds) {
-    let playTime = audioCtx.currentTime + delaySeconds;
-    let activeStops = getActiveStopsForChannel(note.channel);
-    if (activeStops.length === 0) return; // Muted if no stops active!
+        if (activeStops.length === 0) return; 
 
-  // --- NEW: Play using the SoundFont if uploaded ---
-    if (synth) {
-        let delayMs = delaySeconds * 1000;
-        let durationMs = note.duration * 1000;
-        let swellSwitch = document.getElementById('swell-switch');
-        let velocity = (swellSwitch && swellSwitch.checked) ? 100 : 60;
-        
-        setTimeout(() => {
-            synth.noteOn(note.channel, note.midi, velocity);
-            setTimeout(() => synth.noteOff(note.channel, note.midi), durationMs);
-        }, delayMs);
+        // --- 1. SOUNDFONT PLAYBACK ---
+        if (synth) {
+            let delayMs = delaySeconds * 1000;
+            let durationMs = note.duration * 1000;
+            let swellSwitch = document.getElementById('swell-switch');
+            let velocity = (swellSwitch && swellSwitch.checked) ? 100 : 60;
+            
+            setTimeout(() => {
+                synth.noteOn(note.channel, note.midi, velocity);
+                setTimeout(() => synth.noteOff(note.channel, note.midi), durationMs);
+            }, delayMs);
+            return; // Exit here so it doesn't play the fallback sounds
+        }
 
-        return;
- } 
-    // ------------------------------------------------
-
-
-    // (Keep your existing activeStops.forEach code below this as a fallback)
-    activeStops.forEach(stop => {
-        let osc = audioCtx.createOscillator();
-        // ... (rest of your original code) ...
-  
+        // --- 2. FALLBACK AUDIO (Only if no SoundFont is loaded) ---
         activeStops.forEach(stop => {
             let osc = audioCtx.createOscillator();
             let gain = audioCtx.createGain();
-            
-            // Map variations in timber to show proof-of-concept
+
             if (stop.val === 15) osc.type = 'sine';
             else if (stop.val === 82) osc.type = 'triangle';
             else if (stop.val === 40) osc.type = 'sawtooth';
             else osc.type = 'square';
-            
+
             osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
             
-            let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
+            let swellElement = document.getElementById('swell-switch');
+            let swellVal = (swellElement && swellElement.checked) ? 1.0 : 0.4;
             
-            // ADSR Envelope to prevent clicking
             gain.gain.setValueAtTime(0, playTime);
-            gain.gain.linearRampToValueAtTime(0.08 * swellVal, playTime + 0.02); 
-            gain.gain.setValueAtTime(0.08 * swellVal, playTime + note.duration - 0.02); 
-            gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
-            
+            gain.gain.linearRampToValueAtTime(0.08 * swellVal, playTime + 0.02);
+            gain.gain.setValueAtTime(0.08 * swellVal, playTime + note.duration - 0.02);
+            gain.gain.linearRampToValueAtTime(0, playTime + note.duration);
+
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             
@@ -428,8 +399,10 @@ document.getElementById('sf2-upload').addEventListener('change', async (event) =
             osc.stop(playTime + note.duration);
             activeOscillators.push(osc);
         });
-        
-        setTimeout(() => { activeOscillators = activeOscillators.filter(o => o !== null); }, (note.duration + delaySeconds) * 1000 + 100);
+
+        setTimeout(() => {
+            activeOscillators = activeOscillators.filter(o => o !== null);
+        }, (note.duration + delaySeconds) * 1000 + 100);
     }
 
     // ==========================================
