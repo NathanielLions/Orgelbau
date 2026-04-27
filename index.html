@@ -405,14 +405,13 @@
         "Bass (Ch 4)": [ { val: 58, name: "Bass Flute" }, { val: 43, name: "Wooden Trombone" }, { val: 50, name: "Brass Trombone" }]
     };
 
-     let pistons = [
+    let pistons = [
         { name: "Pianissimo", activeStops: [15, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
         { name: "Forte", activeStops: [15, 40, 82, 73, 75, 11, 70, 79, 68, 56, 58, 43], swell: 127 },
-        { name: "Piston Default 1", activeStops: [15, 40, 9, 70, 79, 70, 11, 68, 66, 58, 50], swell: 127 }, { name: "Piston Default 2", activeStops: [8, 15, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
-        { name: "Piston Default 3", activeStops: [15, 82, 40, 58, 50, 43, 70, 11, 79, 56, 68, 66], swell: 127 }, { name: "Piston Default 4", activeStops: [], swell: 64 },
+        { name: "Piston 3", activeStops: [], swell: 64 }, { name: "Piston 4", activeStops: [], swell: 64 },
+        { name: "Piston 5", activeStops: [], swell: 64 }, { name: "Piston 6", activeStops: [], swell: 64 },
         { name: "General Cancel", activeStops: [15, 11, 70, 68, 58, 10], swell: 64 } 
     ];
-
 
     function toggleDarkMode(isDark) {
         if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
