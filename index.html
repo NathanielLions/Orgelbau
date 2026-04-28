@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wurlitzer 165/166 Master Editor (v27)</title>
+    <title>W166 MIDI Mapper</title>
     <script src="https://unpkg.com/@tonejs/midi"></script>
     <style>
         /* CSS VARIABLES FOR LIGHT/DARK MODE */
@@ -238,9 +238,9 @@
             const arrayBuffer = await response.arrayBuffer();
             // NOTE: Parsing raw SF2 requires a bundled external library like SpessaSynth.
             // Below, the Native WebAudio Synthesizer simulates the mapping flawlessly!
-            document.getElementById('audio-status').innerText = "Coming soon";
+            document.getElementById('audio-status').innerText = "";
         } catch (err) {
-            document.getElementById('audio-status').innerText = "Coming soon";
+            document.getElementById('audio-status').innerText = "";
         }
     }
     window.onload = fetchSoundfont;
@@ -408,9 +408,10 @@
     let pistons = [
         { name: "Pianissimo", activeStops: [15, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
         { name: "Forte", activeStops: [15, 40, 82, 73, 75, 11, 70, 79, 68, 56, 58, 43], swell: 127 },
-        { name: "Piston 3", activeStops: [], swell: 64 }, { name: "Piston 4", activeStops: [], swell: 64 },
-        { name: "Piston 5", activeStops: [], swell: 64 }, { name: "Piston 6", activeStops: [], swell: 64 },
-        { name: "General Cancel", activeStops: [15, 11, 70, 68, 58, 10], swell: 64 } 
+        { name: "Piston Default 1", activeStops: [15, 40, 9, 70, 79, 70, 11, 68, 66, 58, 50], swell: 127 }, { name: "Piston Default 2", activeStops: [8, 15, 75, 82, 58, 70, 11, 68, 58 ], swell: 1 },
+        { name: "Piston Default 3", activeStops: [15, 82, 40, 58, 50, 43, 70, 11, 79, 56, 68, 66], swell: 127 }, { name: "Piston Default 4", activeStops: [], swell: 1 },
+        { name: "General Cancel", activeStops: [15, 11, 70, 68, 58, 10], swell: 1 } 
+
     ];
 
     function toggleDarkMode(isDark) {
@@ -443,7 +444,7 @@
         Object.values(organStructure).flat().forEach(s => { let cb = document.getElementById(`stop-${s.val}`); if (cb && cb.checked) active.push(s.val); });
         let percCb = document.getElementById(`stop-${percCC}`); if (percCb && percCb.checked) active.push(percCC);
         let swCb = document.getElementById('swell-switch');
-        pistons[index].swell = (swCb && swCb.checked) ? 127 : 64;
+        pistons[index].swell = (swCb && swCb.checked) ? 127 : 1;
         pistons[index].activeStops = active;
         buildEditorUI(); 
         alert(`Saved current editor registration to ${pistons[index].name}!`);
@@ -636,7 +637,7 @@
         events.forEach(e => {
             let label = ""; let manual = "Sys"; let labelColor = "var(--text-color)";
             if (e.cc === swellCC) {
-                label = e.val >= 100 ? "Swell 100" : "Swell 50"; manual = "Exp"; labelColor = "#9b59b6";
+                label = e.val >= 100 ? "Swell OPEN" : "Swell CLOSED"; manual = "Exp"; labelColor = "#9b59b6";
             } else {
                 let foundName = "Unknown";
                 for (const [man, stops] of Object.entries(organStructure)) {
@@ -812,7 +813,7 @@
     function exportMidi() {
         if (!currentMidi) return;
         const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" });
-        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_WurlitzerReady.mid"; a.click();
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_Wurlitzer166.mid"; a.click();
     }
 </script>
 </body>
