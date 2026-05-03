@@ -89,7 +89,6 @@ function scheduler() {
                 let noteId = `${track.channel}-${note.midi}-${note.ticks}`;
                 if (!scheduledNotes.has(noteId)) {
                     scheduledNotes.add(noteId);
-                    // Passes the channel to the note player
                     scheduleNotePlay(note, track.channel, note.time - currentMidiSeconds); 
                 }
             }
@@ -121,23 +120,33 @@ function scheduleNotePlay(note, channel, delaySeconds) {
     let activeStops = getActiveStopsForChannel(channel);
     
     if (activeStops.length === 0) return; 
+
+    let attack = 0.02;
+    let release = 0.02;
+    if (note.duration < 0.04) {
+        attack = note.duration / 2;
+        release = note.duration / 2;
+    }
     
     activeStops.forEach(stop => {
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         
-        if (stop.val === 15) osc.type = 'sine';
-        else if (stop.val === 82) osc.type = 'triangle';
-        else if (stop.val === 40) osc.type = 'sawtooth';
+        // Instrument Texture Mapping
+        if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
+        else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
+        else if ([40, 82, 68, 48, 50].includes(stop.val)) osc.type = 'sawtooth';
+        else if ([56, 57, 71].includes(stop.val)) osc.type = 'square';
         else osc.type = 'square';
         
         osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
         
         let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
+        let peakVolume = 0.08 * swellVal;
         
         gain.gain.setValueAtTime(0, playTime);
-        gain.gain.linearRampToValueAtTime(0.08 * swellVal, playTime + 0.02); 
-        gain.gain.setValueAtTime(0.08 * swellVal, playTime + note.duration - 0.02); 
+        gain.gain.linearRampToValueAtTime(peakVolume, playTime + attack); 
+        gain.gain.setValueAtTime(peakVolume, Math.max(playTime + attack, playTime + note.duration - release)); 
         gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
         
         osc.connect(gain);
@@ -175,21 +184,38 @@ const channelColors = [
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
 let organStructure = {
-    "Countermelody (Ch 2)": [ { val: 15, name: "Prestant" }, { val: 82, name: "Soft Violin" }, { val: 40, name: "Loud Violin" }, { val: 75, name: "Flageolet" }, { val: 73, name: "Flute" }, { val: 8, name: "Bells" }, { val: 9, name: "Unaphone" } ],
-    "Accompaniment (Ch 3)": [ { val: 11, name: "Stopped Flute" }, { val: 70, name: "Open Flute" }, { val: 79, name: "Strings" } ],
-    "Trumpetmelody (Ch 1)": [ { val: 68, name: "Viola Bassoon" }, { val: 56, name: "Wooden Trumpet" }, { val: 66, name: "Brass Trumpet" } ],
-    "Bass (Ch 4)": [ { val: 58, name: "Bass Flute" }, { val: 43, name: "Wooden Trombone" }, { val: 50, name: "Brass Trombone" }]
+    "Countermelody (Ch 2)": [ 
+        { val: 8, name: "Glockenspiel" }, 
+        { val: 10, name: "Unaphone" }, 
+        { val: 19, name: "Prestant" }, 
+        { val: 20, name: "Undamaris" }, 
+        { val: 71, name: "Clarinet" }, 
+        { val: 40, name: "Forte Violin" }, 
+        { val: 73, name: "Flute" }, 
+        { val: 75, name: "Flageolet" }, 
+        { val: 82, name: "Soft Violin" } 
+    ],
+    "Trumpetmelody (Ch 1)": [ 
+        { val: 68, name: "Viola Bassoon" }, 
+        { val: 56, name: "Wooden Trumpet" }, 
+        { val: 57, name: "Brass Trumpet" } 
+    ],
+    "Accompaniment (Ch 3)": [ 
+        { val: 70, name: "Open Flute" }, 
+        { val: 48, name: "Strings" }, 
+        { val: 11, name: "Stopped Flute" } 
+    ],
+    "Bass (Ch 4)": [ 
+        { val: 57, name: "Wooden Trombone" }, 
+        { val: 50, name: "Brass Trombone" }, 
+        { val: 58, name: "Bass Flute" }
+    ]
 };
 
-// Swell set to 127 for open, 64 for closed
 let pistons = [
-    { name: "Pianissimo", activeStops: [15, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
-    { name: "Forte", activeStops: [15, 40, 82, 73, 75, 11, 70, 79, 68, 56, 58, 43], swell: 127 },
-    { name: "Piston Default 1", activeStops: [15, 40, 9, 70, 79, 70, 11, 68, 66, 58, 50], swell: 127 }, 
-    { name: "Piston Default 2", activeStops: [8, 15, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
-    { name: "Piston Default 3", activeStops: [15, 82, 40, 58, 50, 43, 70, 11, 79, 56, 68, 66], swell: 127 }, 
-    { name: "Piston Default 4", activeStops: [], swell: 64 },
-    { name: "General Cancel", activeStops: [15, 11, 70, 68, 58, 10], swell: 64 } 
+    { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
+    { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57], swell: 127 },
+    { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
 function toggleDarkMode(isDark) {
@@ -222,7 +248,6 @@ function saveCurrentStateToPiston(index) {
     Object.values(organStructure).flat().forEach(s => { let cb = document.getElementById(`stop-${s.val}`); if (cb && cb.checked) active.push(s.val); });
     let percCb = document.getElementById(`stop-${percCC}`); if (percCb && percCb.checked) active.push(percCC);
     let swCb = document.getElementById('swell-switch');
-    // Saves 127 if open, 64 if closed
     pistons[index].swell = (swCb && swCb.checked) ? 127 : 64;
     pistons[index].activeStops = active;
     buildEditorUI(); 
@@ -290,7 +315,7 @@ function buildEditorUI() {
 
     let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
     pistons.forEach((p, i) => {
-        let extraStyle = i === 6 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
+        let extraStyle = i === pistons.length - 1 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
         pistonsHtml += `<button class="nudge-btn" style="width: 100%; text-align: left; padding: 10px; font-size: 1em; ${extraStyle}" onclick="applyRegistrationState(pistons[${i}].activeStops, pistons[${i}].swell)">${p.name}</button>`;
     });
     pistonsHtml += `</div></div>`;
@@ -312,14 +337,11 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     fileName = file.name.replace(".mid", "");
-    
     const arrayBuffer = await file.arrayBuffer();
     currentMidi = new Midi(arrayBuffer);
     ppq = currentMidi.header.ppq || 384; 
-    
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0;
     let activeChannels = new Set(); hiddenChannels.clear();
-
     currentMidi.tracks.forEach(t => {
         if (t.notes.length > 0) activeChannels.add(t.channel);
         t.notes.forEach(n => { 
@@ -329,7 +351,6 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
         });
     });
     if (maxMidiNote < minMidiNote) { minMidiNote = 0; maxMidiNote = 127; }
-
     const filtersDiv = document.getElementById('channel-filters');
     filtersDiv.innerHTML = '<strong style="display:flex; align-items:center; margin-right:10px; font-size:0.9em;">Tracks:</strong>';
     Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
@@ -342,13 +363,11 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
         };
         filtersDiv.appendChild(btn);
     });
-    
     const slider = document.getElementById('tick-slider');
     slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
     document.getElementById('zoom-slider').disabled = false;
     document.getElementById('current-tick').innerText = '0';
     document.getElementById('export-btn').style.display = 'block';
-    
     renderLog(); syncSwitchesToTimeline(0); openTab('page-editor', document.getElementById('tab-editor'));
 });
 
@@ -359,7 +378,6 @@ document.getElementById('tick-slider').addEventListener('input', (e) => {
     document.getElementById('current-tick').innerText = newTick;
     syncSwitchesToTimeline(newTick);
     draw();
-    
     if (isPlaying) {
         killAllNotes();
         startMidiSeconds = currentMidi.header.ticksToSeconds(newTick);
@@ -377,12 +395,10 @@ function nudge(amount) {
     let newVal = parseInt(slider.value) + amount;
     if (newVal < 0) newVal = 0;
     if (newVal > parseInt(slider.max)) newVal = parseInt(slider.max);
-    
     slider.value = newVal;
     document.getElementById('current-tick').innerText = newVal;
     syncSwitchesToTimeline(newVal);
     draw();
-    
     if (isPlaying) {
         killAllNotes();
         startMidiSeconds = currentMidi.header.ticksToSeconds(newVal);
@@ -392,7 +408,6 @@ function nudge(amount) {
 
 function handleSwellToggle(isChecked) {
     if (isUpdatingSwitches) return; 
-    // Uses 127 and 64
     if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp');
     else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp');
 }
@@ -412,11 +427,9 @@ function renderLog() {
         if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); });
     });
     events.sort((a, b) => b.ticks - a.ticks);
-
     events.forEach(e => {
         let label = ""; let manual = "Sys"; let labelColor = "var(--text-color)";
         if (e.cc === swellCC) {
-            // Checks for >= 127 to mark it Open
             label = e.val >= 127 ? "Swell OPEN" : "Swell CLOSED"; manual = "Exp"; labelColor = "#9b59b6";
         } else {
             let foundName = "Unknown";
@@ -434,11 +447,9 @@ function renderLog() {
 
 function applyRegistrationState(activeStopsArr, swellVal) {
     if (!currentMidi) return alert("Please load a MIDI file first!");
-    
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = currentMidi.tracks.find(t => t.channel === 15);
     if (!track) { track = currentMidi.addTrack(); track.channel = 15; }
-
     [swellCC, 80, 81].forEach(cc => {
         if (track.controlChanges[cc]) {
             track.controlChanges[cc] = track.controlChanges[cc].filter(e => {
@@ -447,14 +458,11 @@ function applyRegistrationState(activeStopsArr, swellVal) {
             });
         }
     });
-
     let allOrganCCs = Object.values(organStructure).flat().map(s => s.val); allOrganCCs.push(percCC);
     let currentOffset = 0; 
-
     if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
     track.controlChanges[swellCC].push({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
     currentOffset++;
-
     allOrganCCs.forEach(val => {
         if (!pistonsAffectPercussion && val === percCC) return;
         let turnOn = activeStopsArr.includes(val);
@@ -463,17 +471,13 @@ function applyRegistrationState(activeStopsArr, swellVal) {
         track.controlChanges[targetCC].push({ ticks: baseTick + currentOffset, number: targetCC, value: val / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
         currentOffset++;
     });
-
     [swellCC, 80, 81].forEach(cc => { if(track.controlChanges[cc]) track.controlChanges[cc].sort((a,b) => a.ticks - b.ticks); });
-
     let sliderMax = parseInt(document.getElementById('tick-slider').max);
     let syncTick = baseTick + currentOffset;
     if (syncTick > sliderMax) syncTick = sliderMax;
-
     document.getElementById('tick-slider').value = syncTick;
     document.getElementById('current-tick').innerText = syncTick;
     renderLog(); syncSwitchesToTimeline(syncTick); draw(); 
-    
     if (isPlaying) {
         killAllNotes();
         startMidiSeconds = currentMidi.header.ticksToSeconds(syncTick);
@@ -486,7 +490,6 @@ function addEvent(cc, val, label, manual) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = currentMidi.tracks.find(t => t.channel === 15);
     if (!track) { track = currentMidi.addTrack(); track.channel = 15; }
-
     let ccsToCheck = (cc === swellCC) ? [swellCC] : [80, 81];
     ccsToCheck.forEach(checkCc => {
         if (track.controlChanges[checkCc]) {
@@ -496,7 +499,6 @@ function addEvent(cc, val, label, manual) {
             });
         }
     });
-
     if (!track.controlChanges[cc]) track.controlChanges[cc] = [];
     let safeTick = baseTick; while (track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick += 1; }
     track.controlChanges[cc].push({ ticks: safeTick, number: cc, value: val / 127, time: currentMidi.header.ticksToSeconds(safeTick) });
@@ -518,7 +520,6 @@ function syncSwitchesToTimeline(currentTick) {
     isUpdatingSwitches = true; 
     let track = currentMidi.tracks.find(t => t.channel === 15);
     let stopStates = {}; let swellState = false; 
-
     if (track) {
         let events = [];
         [swellCC, 80, 81].forEach(cc => {
@@ -528,11 +529,9 @@ function syncSwitchesToTimeline(currentTick) {
         events.forEach(e => {
             if (e.cc === 81) stopStates[e.val] = true;
             if (e.cc === 80) stopStates[e.val] = false;
-            // Checks for >= 127 to flip switch visually
             if (e.cc === swellCC) swellState = (e.val >= 127); 
         });
     }
-
     Object.values(organStructure).flat().forEach(s => { let cb = document.getElementById(`stop-${s.val}`); if (cb) cb.checked = !!stopStates[s.val]; });
     let percCheck = document.getElementById(`stop-${percCC}`); if (percCheck) percCheck.checked = !!stopStates[percCC];
     let swellCheckbox = document.getElementById('swell-switch'); if (swellCheckbox) swellCheckbox.checked = swellState;
@@ -545,27 +544,21 @@ function draw() {
     const ctx = canvas.getContext('2d'); const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr);
     const width = rect.width; const height = rect.height;
-
     ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#111' : '#1a1a1a';
     ctx.fillRect(0, 0, width, height);
-    
     const sliderMax = parseInt(document.getElementById('tick-slider').max);
     const currentTick = parseInt(document.getElementById('tick-slider').value);
     const zoom = parseFloat(document.getElementById('zoom-slider').value);
-    
     const windowTicks = sliderMax / zoom;
     let startTick = currentTick - (windowTicks / 2); let endTick = currentTick + (windowTicks / 2);
     if (startTick < 0) { startTick = 0; endTick = windowTicks; }
     if (endTick > sliderMax) { endTick = sliderMax; startTick = sliderMax - windowTicks; }
-
     const scaleX = width / windowTicks;
     const noteRange = (maxMidiNote - minMidiNote) + 4; const noteHeight = height / noteRange;
-
     ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
     for(let i = Math.ceil(startTick / ppq) * ppq; i <= endTick; i += ppq) {
         ctx.beginPath(); ctx.moveTo((i - startTick) * scaleX, 0); ctx.lineTo((i - startTick) * scaleX, height); ctx.stroke();
     }
-
     currentMidi.tracks.forEach(t => {
         if (hiddenChannels.has(t.channel)) return; 
         ctx.fillStyle = channelColors[t.channel % 16];
@@ -573,7 +566,6 @@ function draw() {
             if (n.ticks + n.durationTicks > startTick && n.ticks < endTick) ctx.fillRect((n.ticks - startTick) * scaleX, height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3));
         });
     });
-
     let track = currentMidi.tracks.find(t => t.channel === 15);
     if (track) {
         [swellCC, 80, 81].forEach(cc => {
@@ -585,7 +577,6 @@ function draw() {
             });
         });
     }
-
     ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; ctx.beginPath();
     const scrubberX = (currentTick - startTick) * scaleX; ctx.moveTo(scrubberX, 0); ctx.lineTo(scrubberX, height); ctx.stroke();
 }
@@ -593,7 +584,7 @@ function draw() {
 function exportMidi() {
     if (!currentMidi) return;
     const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_Wurlitzer166.mid"; a.click();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click();
 }
 
 // ==========================================
