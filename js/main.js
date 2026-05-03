@@ -89,7 +89,14 @@ function scheduler() {
                 let noteId = `${track.channel}-${note.midi}-${note.ticks}`;
                 if (!scheduledNotes.has(noteId)) {
                     scheduledNotes.add(noteId);
-                    scheduleNotePlay(note, note.time - currentMidiSeconds);
+                    // UPDATE THIS LINE BELOW
+                    scheduleNotePlay(note, track.channel, note.time - currentMidiSeconds); 
+                    let playTime = audioCtx.currentTime + delaySeconds;
+    
+    // Change note.channel to just channel here
+    let activeStops = getActiveStopsForChannel(channel); 
+    
+    if (activeStops.length === 0) return;
                 }
             }
         });
