@@ -187,7 +187,7 @@ const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "T
 let organStructure = {
     "Countermelody (Ch 2)": [ 
         { val: 8, name: "Glockenspiel" }, 
-        { val: 10, name: "Unaphone" }, 
+        { val: 9, name: "Unaphone" }, 
         { val: 19, name: "Prestant" }, 
         { val: 20, name: "Undamaris" }, 
         { val: 71, name: "Clarinet" }, 
@@ -216,7 +216,7 @@ let organStructure = {
 let pistons = [
     { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
     { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57], swell: 127 },
-    { name: "Piston Default 1", activeStops: [19, 40, 10, 70, 48, 70, 11, 68, 57, 58, 50], swell: 127 }, 
+    { name: "Piston Default 1", activeStops: [19, 40, 9, 70, 48, 70, 11, 68, 57, 58, 50], swell: 127 }, 
     { name: "Piston Default 2", activeStops: [8, 19, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
     { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 70, 11, 48, 56, 68, 57], swell: 127 }, 
     { name: "Piston Default 4", activeStops: [], swell: 64 },
