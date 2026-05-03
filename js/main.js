@@ -613,3 +613,4 @@ window.removeEvent = removeEvent;
 window.applyRegistrationState = applyRegistrationState;
 window.exportMidi = exportMidi;
 window.pistonsAffectPercussion = pistonsAffectPercussion;
+window.pistons = pistons;
