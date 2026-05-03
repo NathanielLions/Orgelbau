@@ -207,7 +207,7 @@ let organStructure = {
         { val: 11, name: "Stopped Flute" } 
     ],
     "Bass (Ch 4)": [ 
-        { val: 57, name: "Wooden Trombone" }, 
+        { val: 43, name: "Wooden Trombone" }, 
         { val: 50, name: "Brass Trombone" }, 
         { val: 58, name: "Bass Flute" }
     ]
