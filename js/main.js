@@ -121,6 +121,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
     
     if (activeStops.length === 0) return; 
 
+    // Audio Safety Check for orchestrion short notes
     let attack = 0.02;
     let release = 0.02;
     if (note.duration < 0.04) {
@@ -171,7 +172,7 @@ let maxMidiNote = 0;
 let isUpdatingSwitches = false; 
 
 let hiddenChannels = new Set();
-let pistonsAffectPercussion = false;
+window.pistonsAffectPercussion = false;
 
 let swellCC = 11;
 let percCC = 10;
@@ -215,6 +216,10 @@ let organStructure = {
 let pistons = [
     { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
     { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57], swell: 127 },
+    { name: "Piston Default 1", activeStops: [19, 40, 10, 70, 48, 70, 11, 68, 57, 58, 50], swell: 127 }, 
+    { name: "Piston Default 2", activeStops: [8, 19, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
+    { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 70, 11, 48, 56, 68, 57], swell: 127 }, 
+    { name: "Piston Default 4", activeStops: [], swell: 64 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
@@ -450,21 +455,24 @@ function applyRegistrationState(activeStopsArr, swellVal) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = currentMidi.tracks.find(t => t.channel === 15);
     if (!track) { track = currentMidi.addTrack(); track.channel = 15; }
+    
     [swellCC, 80, 81].forEach(cc => {
         if (track.controlChanges[cc]) {
             track.controlChanges[cc] = track.controlChanges[cc].filter(e => {
-                if (!pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true;
+                // Settings check for percussion
+                if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true;
                 return Math.abs(e.ticks - baseTick) > 40; 
             });
         }
     });
+    
     let allOrganCCs = Object.values(organStructure).flat().map(s => s.val); allOrganCCs.push(percCC);
     let currentOffset = 0; 
     if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
     track.controlChanges[swellCC].push({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
     currentOffset++;
     allOrganCCs.forEach(val => {
-        if (!pistonsAffectPercussion && val === percCC) return;
+        if (!window.pistonsAffectPercussion && val === percCC) return;
         let turnOn = activeStopsArr.includes(val);
         let targetCC = turnOn ? 81 : 80;
         if (!track.controlChanges[targetCC]) track.controlChanges[targetCC] = [];
@@ -604,5 +612,4 @@ window.handleStopToggle = handleStopToggle;
 window.removeEvent = removeEvent;
 window.applyRegistrationState = applyRegistrationState;
 window.exportMidi = exportMidi;
-window.pistonsAffectPercussion = pistonsAffectPercussion;
 window.pistons = pistons;
