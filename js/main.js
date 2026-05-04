@@ -434,6 +434,21 @@ function openTab(tabId, btnElement) {
 // ==========================================
 // 3. IMPORT INTERCEPTOR & MODAL LOGIC
 // ==========================================
+function getUnknownStops(track) {
+    if (!track) return [];
+    let knownVals = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
+    let foundVals = new Set();
+    [80, 81].forEach(cc => {
+        if (track.controlChanges[cc]) {
+            track.controlChanges[cc].forEach(e => {
+                let val = Math.round(e.value * 127);
+                if (!knownVals.includes(val)) foundVals.add(val);
+            });
+        }
+    });
+    return Array.from(foundVals);
+}
+
 function createImportModal() {
     if(document.getElementById('import-modal')) return;
     const modal = document.createElement('div');
@@ -452,6 +467,42 @@ function createImportModal() {
     document.body.appendChild(modal);
 }
 
+function showRemapModal(unknowns) {
+    if(!document.getElementById('remap-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'remap-modal';
+        modal.style.cssText = "display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(3px);";
+        document.body.appendChild(modal);
+    }
+    const modal = document.getElementById('remap-modal');
+    
+    let manualOptions = Object.keys(organStructure).map(k => `<option value="${k}">${k.split(' ')[0]}</option>`).join('');
+
+    let html = `<div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:500px; width: 100%; text-align:left; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 80vh; overflow-y: auto;">
+        <h3 style="margin-top:0; color:#e74c3c; font-size:1.4em; text-align:center;">Unknown Stops Detected</h3>
+        <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4; text-align:center;">We found legacy CC signals that don't match your current setup. Assign them below so they appear in your editor.</p>
+        <div id="remap-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom: 20px;">`;
+
+    unknowns.forEach(val => {
+        html += `<div style="display:flex; gap: 10px; align-items:center; background: var(--stop-row-bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border-color);">
+            <span style="font-weight:bold; color:#f1c40f; width: 60px;">CC ${val}</span>
+            <input type="text" id="remap-name-${val}" class="mapping-input" placeholder="Stop Name" style="flex:1;">
+            <select id="remap-manual-${val}" class="mapping-input" style="flex:1; cursor:pointer;">
+                ${manualOptions}
+            </select>
+        </div>`;
+    });
+
+    html += `</div>
+        <div style="display:flex; justify-content:center; gap: 10px;">
+            <button class="nudge-btn" style="background:#e74c3c; color:white; border:none; padding:10px 20px; font-size:1em;" onclick="skipRemap()">Ignore</button>
+            <button class="nudge-btn" style="background:#2ecc71; color:white; border:none; padding:10px 20px; font-size:1em;" onclick="applyRemap([${unknowns.join(',')}])">Add Mappings</button>
+        </div>
+    </div>`;
+    modal.innerHTML = html;
+    modal.style.display = 'flex';
+}
+
 window.onload = () => { 
     fetchSoundfont(); 
     createImportModal();
@@ -462,7 +513,6 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
     currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
     
-    // NEW FINGERPRINT DETECTION LOGIC
     let systemTrack = getSystemTrack();
     
     if (systemTrack) {
@@ -474,12 +524,51 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
 
 function handleImportChoice(choice) {
     document.getElementById('import-modal').style.display = 'none';
+    let sysTrack = getSystemTrack();
+
     if (choice === 'clear') {
-        let sysTrack = getSystemTrack();
         if (sysTrack) {
             currentMidi.tracks = currentMidi.tracks.filter(t => t !== sysTrack);
         }
+        finalizeImport();
+    } else {
+        // MODIFY CHOICE
+        let unknowns = getUnknownStops(sysTrack);
+        if (unknowns.length > 0) {
+            showRemapModal(unknowns);
+        } else {
+            finalizeImport();
+        }
     }
+}
+
+function applyRemap(unknowns) {
+    unknowns.forEach(val => {
+        let nameField = document.getElementById(`remap-name-${val}`).value.trim();
+        let name = nameField !== "" ? nameField : `Recovered CC ${val}`;
+        let manualKey = document.getElementById(`remap-manual-${val}`).value;
+        
+        organStructure[manualKey].push({ val: val, name: name, visible: true });
+    });
+    
+    // Ensure the new possible stops are known to the piston system
+    let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
+    pistons.forEach(p => {
+        newAllStops.forEach(cc => { 
+            if (!p.activeStops.includes(cc) && !p.offStops.includes(cc)) {
+                p.offStops.push(cc); // Default new stops to OFF for existing pistons
+            }
+        });
+    });
+
+    document.getElementById('remap-modal').style.display = 'none';
+    buildSettingsUI();
+    buildEditorUI();
+    finalizeImport();
+}
+
+function skipRemap() {
+    document.getElementById('remap-modal').style.display = 'none';
     finalizeImport();
 }
 
@@ -648,6 +737,6 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons;
-window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
+window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice; window.applyRemap = applyRemap; window.skipRemap = skipRemap;
 
 buildSettingsUI(); buildEditorUI();
