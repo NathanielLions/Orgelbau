@@ -236,6 +236,27 @@ function toggleMidiVals(show) {
 }
 
 // ==========================================
+// SYSTEM TRACK FINGERPRINTING HELPERS
+// ==========================================
+function getSystemTrack() {
+    if (!currentMidi) return null;
+    return currentMidi.tracks.find(t => 
+        t.channel === 15 || 
+        (t.controlChanges[80] && t.controlChanges[80].length > 0) || 
+        (t.controlChanges[81] && t.controlChanges[81].length > 0)
+    );
+}
+
+function getOrCreateSystemTrack() {
+    let trk = getSystemTrack();
+    if (!trk) {
+        trk = currentMidi.addTrack();
+        trk.channel = 15;
+    }
+    return trk;
+}
+
+// ==========================================
 // NEW VISIBILITY & UI ENGINE (SETTINGS)
 // ==========================================
 function buildSettingsUI() {
@@ -402,7 +423,6 @@ function buildEditorUI() {
     document.getElementById('col-pistons').innerHTML = pistonsHtml;
 }
 
-// --- MISSING TAB FUNCTION ADDED BACK IN ---
 function openTab(tabId, btnElement) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -422,7 +442,7 @@ function createImportModal() {
     modal.innerHTML = `
         <div style="background:var(--manual-bg, #222); padding:25px; border-radius:8px; max-width:400px; text-align:center; border: 1px solid var(--border-color, #444); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
             <h3 style="margin-top:0; color:#f39c12; font-size:1.4em;">Organ Data Detected</h3>
-            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Wurlitzer registration data on Track 15. How would you like to proceed?</p>
+            <p style="font-size:0.95em; color:var(--text-color, #eee); margin-bottom:20px; line-height:1.4;">This MIDI file already contains Wurlitzer registration data. How would you like to proceed?</p>
             <div style="display:flex; flex-direction:column; gap:12px;">
                 <button class="nudge-btn" style="background:#3498db; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('modify')">Modify Existing Mappings</button>
                 <button class="nudge-btn" style="background:#e74c3c; color:white; border:none; padding:12px; font-size:1em;" onclick="handleImportChoice('clear')">Start Over (Clear Mappings)</button>
@@ -442,15 +462,10 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
     currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
     
-    // Detection Logic: Does Track 15 exist and contain CC 4, 80, or 81?
-    let systemTrack = currentMidi.tracks.find(t => t.channel === 15);
-    let hasOrganData = false;
+    // NEW FINGERPRINT DETECTION LOGIC
+    let systemTrack = getSystemTrack();
     
     if (systemTrack) {
-        hasOrganData = [swellCC, 80, 81].some(cc => systemTrack.controlChanges[cc] && systemTrack.controlChanges[cc].length > 0);
-    }
-    
-    if (hasOrganData) {
         document.getElementById('import-modal').style.display = 'flex';
     } else {
         finalizeImport(); 
@@ -460,7 +475,10 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
 function handleImportChoice(choice) {
     document.getElementById('import-modal').style.display = 'none';
     if (choice === 'clear') {
-        currentMidi.tracks = currentMidi.tracks.filter(t => t.channel !== 15);
+        let sysTrack = getSystemTrack();
+        if (sysTrack) {
+            currentMidi.tracks = currentMidi.tracks.filter(t => t !== sysTrack);
+        }
     }
     finalizeImport();
 }
@@ -509,7 +527,7 @@ function handleStopToggle(val, name, manual, isChecked) { if (isUpdatingSwitches
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); tbody.innerHTML = '';
-    if (!currentMidi) return; let track = currentMidi.tracks.find(t => t.channel === 15); if (!track) return;
+    if (!currentMidi) return; let track = getSystemTrack(); if (!track) return;
     let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
     events.sort((a, b) => b.ticks - a.ticks);
     events.forEach(e => {
@@ -529,8 +547,7 @@ function applyRegistrationState(pistonIndex) {
     if (!currentMidi) return alert("Please load a MIDI file first!");
     let p = pistons[pistonIndex];
     let baseTick = parseInt(document.getElementById('tick-slider').value);
-    let track = currentMidi.tracks.find(t => t.channel === 15) || currentMidi.addTrack();
-    track.channel = 15;
+    let track = getOrCreateSystemTrack();
     
     [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => { if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true; return Math.abs(e.ticks - baseTick) > 40; }); });
     let currentOffset = 0; 
@@ -567,8 +584,8 @@ function applyRegistrationState(pistonIndex) {
 function addEvent(cc, val, label, manual) {
     if (!currentMidi) return;
     let baseTick = parseInt(document.getElementById('tick-slider').value);
-    let track = currentMidi.tracks.find(t => t.channel === 15) || currentMidi.addTrack();
-    track.channel = 15;
+    let track = getOrCreateSystemTrack();
+    
     [swellCC, 80, 81].forEach(checkCc => { if (track.controlChanges[checkCc]) track.controlChanges[checkCc] = track.controlChanges[checkCc].filter(e => !( ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val)) && Math.abs(e.ticks - baseTick) <= 10)); });
     if (!track.controlChanges[cc]) track.controlChanges[cc] = [];
     let safeTick = baseTick; while (track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
@@ -577,7 +594,7 @@ function addEvent(cc, val, label, manual) {
 }
 
 function removeEvent(cc, val, tick) {
-    let track = currentMidi.tracks.find(t => t.channel === 15);
+    let track = getSystemTrack();
     if (track && track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => !(e.ticks === tick && Math.round(e.value * 127) === val));
     renderLog(); syncSwitchesToTimeline(parseInt(document.getElementById('tick-slider').value)); draw();
 }
@@ -585,7 +602,7 @@ function removeEvent(cc, val, tick) {
 function syncSwitchesToTimeline(currentTick) {
     if (!currentMidi) return;
     isUpdatingSwitches = true; 
-    let track = currentMidi.tracks.find(t => t.channel === 15);
+    let track = getSystemTrack();
     let stopStates = {}; let swellState = false; 
     if (track) {
         let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
@@ -618,7 +635,7 @@ function draw() {
         if (hiddenChannels.has(t.channel)) return; ctx.fillStyle = channelColors[t.channel % 16];
         t.notes.forEach(n => { if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); });
     });
-    let trk = currentMidi.tracks.find(t => t.channel === 15);
+    let trk = getSystemTrack();
     if (trk) {
         [swellCC, 80, 81].forEach(cc => { if (trk.controlChanges[cc]) trk.controlChanges[cc].forEach(e => { if (e.ticks >= st && e.ticks <= st + windowTicks) { ctx.fillStyle = cc === swellCC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === swellCC ? 16 : 0, 4, 12); } }); });
     }
