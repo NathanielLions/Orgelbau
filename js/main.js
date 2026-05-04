@@ -233,7 +233,7 @@ function toggleMidiVals(show) {
 }
 
 // ==========================================
-// NEW 3-STATE UI ENGINE
+// NEW 3-STATE UI ENGINE (SETTINGS)
 // ==========================================
 function buildSettingsUI() {
     const container = document.getElementById('settings-mapping-container');
@@ -268,14 +268,15 @@ function buildSettingsUI() {
     let pistonHtml = `<div class="panel"><h3>Piston Configuration</h3>
         <div style="display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">`;
     
+    // The subtabs for each piston
     pistons.forEach((p, i) => {
         let activeClass = i === editingPistonIndex ? "background: #f39c12; color: white; border-color: #f39c12;" : "";
         pistonHtml += `<button class="nudge-btn" style="${activeClass}" onclick="editingPistonIndex=${i}; buildSettingsUI();">${p.name}</button>`;
     });
     
     pistonHtml += `</div>
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-            <input type="text" class="mapping-input" style="width: 250px; text-align: left;" value="${piston.name}" onchange="pistons[${editingPistonIndex}].name = this.value; buildSettingsUI(); buildEditorUI();" title="Rename Piston">
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; background: var(--stop-row-bg); padding: 10px; border-radius: 5px; border: 1px solid var(--border-color);">
+            <input type="text" class="mapping-input" style="width: 200px; text-align: left; font-size: 1em;" value="${piston.name}" onchange="pistons[${editingPistonIndex}].name = this.value; buildSettingsUI(); buildEditorUI();" title="Rename Piston">
             <label class="switch" title="Swell Shutters Open"><input type="checkbox" ${piston.swell >= 127 ? "checked" : ""} onchange="pistons[${editingPistonIndex}].swell = this.checked ? 127 : 64"><span class="slider-switch swell-bg"></span></label>
             <span style="font-size:0.9em; font-weight:bold; color:#8e44ad;">Swell Open</span>
         </div>
@@ -290,7 +291,6 @@ function buildSettingsUI() {
         });
     }
     
-    // Add Percussion to the grid
     let percState = piston.activeStops.includes(percCC) ? 1 : (piston.offStops.includes(percCC) ? -1 : 0);
     pistonHtml += buildTriStateBox("Percussion", percCC, "#8e44ad", percState);
 
@@ -298,18 +298,18 @@ function buildSettingsUI() {
     container.innerHTML += pistonHtml;
 }
 
-// Generates the compact HTML for the 3-state Discord-style toggles
+// Generates the colored buttons for 3-state Discord logic
 function buildTriStateBox(name, val, color, state) {
-    let offClass = state === -1 ? "background:#e74c3c; color:white; opacity:1;" : "background:transparent; color:var(--text-color); opacity:0.5;";
-    let neutClass = state === 0 ? "background:#95a5a6; color:white; opacity:1;" : "background:transparent; color:var(--text-color); opacity:0.5;";
-    let onClass = state === 1 ? `background:${color}; color:white; opacity:1;` : "background:transparent; color:var(--text-color); opacity:0.5;";
+    let offOp = state === -1 ? '1' : '0.3';
+    let neutOp = state === 0 ? '1' : '0.3';
+    let onOp = state === 1 ? '1' : '0.3';
 
-    return `<div style="display:flex; flex-direction:column; background:var(--stop-row-bg); border:1px solid var(--border-color); border-top:3px solid ${color}; border-radius:4px; width:130px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-        <div style="font-size:0.75em; font-weight:bold; text-align:center; padding:4px; border-bottom:1px solid var(--border-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${name}">${name}</div>
-        <div style="display:flex; width:100%;">
-            <button style="flex:1; border:none; cursor:pointer; padding:3px 0; font-size:0.8em; font-weight:bold; border-right:1px solid var(--border-color); transition:0.2s; ${offClass}" onclick="setTriState(${val}, -1)">✖</button>
-            <button style="flex:1; border:none; cursor:pointer; padding:3px 0; font-size:0.8em; font-weight:bold; border-right:1px solid var(--border-color); transition:0.2s; ${neutClass}" onclick="setTriState(${val}, 0)">/</button>
-            <button style="flex:1; border:none; cursor:pointer; padding:3px 0; font-size:0.8em; font-weight:bold; transition:0.2s; ${onClass}" onclick="setTriState(${val}, 1)">✔</button>
+    return `<div style="background: var(--stop-row-bg); padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; display: flex; flex-direction: column; gap: 6px; min-width: 140px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-size: 0.85em; font-weight: bold; text-align: center; color: var(--text-color);">${name}</div>
+        <div style="display: flex; gap: 4px;">
+            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#e74c3c; opacity:${offOp}; transition:0.2s;" onclick="setTriState(${val}, -1)">✖</button>
+            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:#95a5a6; opacity:${neutOp}; transition:0.2s;" onclick="setTriState(${val}, 0)">/</button>
+            <button style="flex:1; border:none; border-radius:3px; color:white; font-weight:bold; cursor:pointer; padding:6px 0; background:${color}; opacity:${onOp}; transition:0.2s;" onclick="setTriState(${val}, 1)">✔</button>
         </div>
     </div>`;
 }
@@ -359,14 +359,17 @@ function buildEditorUI() {
     }
 
     const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
-    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters</span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion</span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
+    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
     document.getElementById('col-bass-exp').appendChild(expDiv);
 
-    let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid">`;
+    // REVERTED: Original Full-Width Buttons for Dashboard Pistons
+    let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
     pistons.forEach((p, i) => {
-        pistonsHtml += `<div class="stop-row"><span class="stop-name" style="color:#e67e22">${p.name}</span><label class="switch"><input type="checkbox" onchange="if(this.checked) { applyRegistrationState(${i}); setTimeout(()=>this.checked=false, 500); }"><span class="slider-switch piston-switch-bg"></span></label></div>`;
+        let extraStyle = i === pistons.length - 1 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
+        pistonsHtml += `<button class="nudge-btn" style="width: 100%; text-align: left; padding: 10px; font-size: 1em; ${extraStyle}" onclick="applyRegistrationState(${i})">${p.name}</button>`;
     });
-    document.getElementById('col-pistons').innerHTML = pistonsHtml + `</div></div>`;
+    pistonsHtml += `</div></div>`;
+    document.getElementById('col-pistons').innerHTML = pistonsHtml;
 }
 
 buildSettingsUI(); buildEditorUI();
