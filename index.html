@@ -47,11 +47,13 @@
             
             <div class="controls-row">
                 <div class="nudge-group">
-                    <button class="nudge-btn" onclick="nudge(-384)">-1 Beat</button>
-                    <button class="nudge-btn" onclick="nudge(-10)">-10 Ticks</button>
-                    <span style="font-size: 1.2em; font-weight: bold; min-width: 120px; text-align: center; color: #3498db;">Tick: <span id="current-tick">0</span></span>
-                    <button class="nudge-btn" onclick="nudge(10)">+10 Ticks</button>
-                    <button class="nudge-btn" onclick="nudge(384)">+1 Beat</button>
+                    <button class="nudge-btn" onclick="nudgeSeconds(-1)">-1 Sec</button>
+                    <button class="nudge-btn" onclick="nudgeBeats(-1)">-1 Beat</button>
+                    <button class="nudge-btn" onclick="nudgeTicks(-10)">-10 Ticks</button>
+                    <span style="font-size: 1.2em; font-weight: bold; min-width: 140px; text-align: center; color: #3498db;"><span id="time-label">Tick</span>: <span id="current-tick">0</span></span>
+                    <button class="nudge-btn" onclick="nudgeTicks(10)">+10 Ticks</button>
+                    <button class="nudge-btn" onclick="nudgeBeats(1)">+1 Beat</button>
+                    <button class="nudge-btn" onclick="nudgeSeconds(1)">+1 Sec</button>
                 </div>
                 
                 <div class="zoom-group">
@@ -80,7 +82,7 @@
             <h3>Event History Log</h3>
             <div class="log-container">
                 <table>
-                    <thead><tr><th>Tick</th><th>Div</th><th>Action</th><th>Undo</th></tr></thead>
+                    <thead><tr><th id="log-time-header">Tick</th><th>Div</th><th>Action</th><th>Undo</th></tr></thead>
                     <tbody id="log-body"></tbody>
                 </table>
             </div>
@@ -90,6 +92,14 @@
     <div id="page-settings" class="tab-content">
         <div class="panel">
             <h3>Workflow Settings</h3>
+            <div class="settings-row" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                <span style="font-weight: bold; color: #f1c40f;">Timeline Display Format</span>
+                <select id="time-format-select" onchange="updateTimeFormat(this.value)" class="mapping-input" style="width: 200px; cursor: pointer; font-size: 1em;">
+                    <option value="ticks" selected>Ticks</option>
+                    <option value="time">Time (MM:SS)</option>
+                    <option value="measures">Measures (Bar:Beat)</option>
+                </select>
+            </div>
             <div class="settings-row">
                 <span>Enable Dark Mode</span>
                 <label class="switch">
