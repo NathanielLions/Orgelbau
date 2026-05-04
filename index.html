@@ -16,7 +16,7 @@
     <div class="tabs-nav">
         <button class="tab-btn active" id="tab-import" onclick="openTab('page-import', this)">1. Import & Routing</button>
         <button class="tab-btn" id="tab-editor" onclick="openTab('page-editor', this)">2. Editor</button>
-        <button class="tab-btn" id="tab-export" onclick="openTab('page-export', this)">3. History & Export</button>
+        <button class="tab-btn" id="tab-export" onclick="openTab('page-export', this)">3. Metadata & Export</button>
         <button class="tab-btn" id="tab-settings" onclick="openTab('page-settings', this)">4. Settings</button>
     </div>
 
@@ -86,10 +86,45 @@
     </div>
 
     <div id="page-export" class="tab-content">
+        
+        <div class="panel">
+            <h3>Project Metadata</h3>
+            <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 0.9em;">This data is injected seamlessly into a hidden track. It tracks authorship and version history, and can be read by this app whenever the file is imported back in.</p>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Song Title</label>
+                    <input type="text" id="meta-title" class="mapping-input" onchange="updateMetadata('title', this.value)">
+                </div>
+                <div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Arranger / Composer</label>
+                    <input type="text" id="meta-arranger" class="mapping-input" onchange="updateMetadata('arranger', this.value)">
+                </div>
+                <div style="flex: 1 1 100px; display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Version</label>
+                    <input type="text" id="meta-version" class="mapping-input" onchange="updateMetadata('version', this.value)">
+                </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+                <div style="flex: 1 1 150px; display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Date Created</label>
+                    <input type="date" id="meta-created" class="mapping-input" onchange="updateMetadata('created', this.value)">
+                </div>
+                <div style="flex: 1 1 150px; display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Last Modified</label>
+                    <input type="date" id="meta-modified" class="mapping-input" onchange="updateMetadata('modified', this.value)" readonly style="opacity: 0.7; cursor: not-allowed; background: var(--bg-color);">
+                </div>
+                <div style="flex: 2 1 250px; display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Copyright Link</label>
+                    <input type="text" id="meta-copyright" class="mapping-input" onchange="updateMetadata('copyright', this.value)">
+                </div>
+            </div>
+        </div>
+
         <div class="panel">
             <button class="export-btn" id="export-btn" onclick="exportMidi()">Download Ready MIDI</button>
             
-            <h3>Event History Log</h3>
+            <h3 style="margin-top: 30px;">Event History Log</h3>
             <div class="log-container">
                 <table>
                     <thead><tr><th id="log-time-header">Tick</th><th>Div</th><th>Action</th><th>Undo</th></tr></thead>
