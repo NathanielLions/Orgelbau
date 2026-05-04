@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>W166 MIDI Mapper</title>
-    
     <script src="https://unpkg.com/@tonejs/midi"></script>
-    
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="hide-midi-vals">
@@ -23,49 +21,40 @@
     <div id="page-import" class="tab-content active">
         <div id="upload-panel" class="panel" style="text-align: center; padding: 40px 20px;">
             <h3>Select a MIDI File to Begin</h3>
-            <p style="color: #7f8c8d; margin-bottom: 20px;">Load your standard MIDI file to start mapping Wurlitzer stops.</p>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Standard MIDI file (.mid) required.</p>
             <input type="file" id="midi-upload" accept=".mid,.midi" style="font-size: 1.1em; padding: 10px; border: 2px dashed #3498db; border-radius: 8px; background: var(--manual-bg); color: var(--text-color); cursor: pointer;">
         </div>
 
         <div id="routing-panel" class="panel" style="display: none;">
-            <h3>Track Routing & Channel Setup</h3>
-            <p style="color: #7f8c8d; margin-bottom: 20px;">Assign your imported MIDI channels to the correct Wurlitzer manuals. This ensures the exported file has the correct channel structure (Ch 1-4) and descriptive DAW instruments (e.g. Electric Piano, Trumpet).</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin:0;">Track Routing</h3>
+                <button class="nudge-btn" onclick="hardReset()" style="background: #e74c3c; font-size: 0.85em; padding: 5px 15px;">↺ Start Over</button>
+            </div>
+            <p style="color: #7f8c8d; margin-bottom: 20px; font-size: 0.9em;">Assign incoming MIDI tracks to the correct Wurlitzer output channels.</p>
             
-            <div id="routing-list" style="display: flex; flex-direction: column; gap: 8px;">
-                </div>
+            <div id="routing-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
 
-            <button class="nudge-btn" onclick="applyRoutingAndStart()" style="background: #2ecc71; color: white; width: 100%; margin-top: 25px; font-size: 1.1em; padding: 12px; font-weight: bold; border: none;">Confirm Routing & Open Editor</button>
+            <button class="nudge-btn" onclick="applyRoutingAndStart()" style="background: #2ecc71; color: white; width: 100%; margin-top: 25px; font-size: 1.1em; padding: 12px; font-weight: bold; border: none;">Confirm & Launch Editor</button>
         </div>
     </div>
 
     <div id="page-editor" class="tab-content">
-        
         <div class="transport-bar">
-            <button class="nudge-btn" id="play-btn" onclick="togglePlay()" style="background: #2ecc71; color: white; width: 120px; font-size: 1.1em; padding: 8px; border:none;">▶ Play</button>
-            <button class="nudge-btn" onclick="stopPlayback()" style="background: #e74c3c; color: white; width: 120px; font-size: 1.1em; padding: 8px; border:none;">■ Stop</button>
-            <span id="audio-status" style="font-size: 0.9em; color: var(--text-color); margin-left: 10px; font-weight: bold;">🔊 Initializing Audio Engine...</span>
+            <button class="nudge-btn" id="play-btn" onclick="togglePlay()" style="background: #2ecc71; color: white; width: 120px; padding: 8px; border:none;">▶ Play</button>
+            <button class="nudge-btn" onclick="stopPlayback()" style="background: #e74c3c; color: white; width: 120px; padding: 8px; border:none;">■ Stop</button>
+            <span id="audio-status" style="font-size: 0.9em; color: var(--text-color); margin-left: 10px; font-weight: bold;">🔊 Ready</span>
         </div>
 
         <div class="panel" style="border: 2px solid #3498db;">
             <canvas id="piano-roll"></canvas>
-            
-            <div class="slider-wrapper">
-                <input type="range" id="tick-slider" min="0" value="0" disabled>
-            </div>
-
+            <div class="slider-wrapper"><input type="range" id="tick-slider" min="0" value="0" disabled></div>
             <div id="channel-filters"></div>
-            
             <div class="controls-row">
                 <div class="nudge-group">
-                    <button class="nudge-btn" onclick="nudgeSeconds(-1)">-1 Sec</button>
-                    <button class="nudge-btn" onclick="nudgeBeats(-1)">-1 Beat</button>
                     <button class="nudge-btn" onclick="nudgeTicks(-10)">-10 Ticks</button>
-                    <span style="font-size: 1.2em; font-weight: bold; min-width: 140px; text-align: center; color: #3498db;"><span id="time-label">Tick</span>: <span id="current-tick">0</span></span>
+                    <span style="font-size: 1.1em; font-weight: bold; min-width: 140px; text-align: center;"><span id="time-label">Tick</span>: <span id="current-tick">0</span></span>
                     <button class="nudge-btn" onclick="nudgeTicks(10)">+10 Ticks</button>
-                    <button class="nudge-btn" onclick="nudgeBeats(1)">+1 Beat</button>
-                    <button class="nudge-btn" onclick="nudgeSeconds(1)">+1 Sec</button>
                 </div>
-                
                 <div class="zoom-group">
                     <strong>Zoom:</strong>
                     <input type="range" id="zoom-slider" class="zoom-slider" min="1" max="100" value="1" disabled>
@@ -77,55 +66,51 @@
         <div class="panel" style="background: var(--bg-color);">
             <h3>Organ Registration Dashboard</h3>
             <div class="registration-flex">
-                <div id="col-countermelody" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
-                <div id="col-accomp-trumpet" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
-                <div id="col-bass-exp" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
-                <div id="col-pistons" style="display: flex; flex-direction: column; gap: 15px; flex: 1 1 200px;"></div>
+                <div id="col-countermelody" style="flex: 1 1 200px;"></div>
+                <div id="col-accomp-trumpet" style="flex: 1 1 200px;"></div>
+                <div id="col-bass-exp" style="flex: 1 1 200px;"></div>
+                <div id="col-pistons" style="flex: 1 1 200px;"></div>
             </div>
         </div>
     </div>
 
     <div id="page-export" class="tab-content">
-        
         <div class="panel">
-            <h3>Project Metadata</h3>
-            <p style="color: #7f8c8d; margin-bottom: 25px; font-size: 0.9em;">This data is injected seamlessly into a hidden track to preserve authorship and version history. It will be automatically populated when the file is re-imported.</p>
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 10px;">
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Song Title</label>
-                    <input type="text" id="meta-title" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('title', this.value)">
+            <h3 style="margin-bottom: 20px;">Project Metadata</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <div class="meta-field" style="flex: 1 1 300px;">
+                    <label>Song Title</label>
+                    <input type="text" id="meta-title" class="mapping-input" onchange="updateMetadata('title', this.value)">
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Arranger / Composer</label>
-                    <input type="text" id="meta-arranger" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('arranger', this.value)" placeholder="e.g. John Doe">
+                <div class="meta-field" style="flex: 1 1 300px;">
+                    <label>Arranger / Composer</label>
+                    <input type="text" id="meta-arranger" class="mapping-input" onchange="updateMetadata('arranger', this.value)" placeholder="Enter name...">
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Version</label>
-                    <input type="text" id="meta-version" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('version', this.value)">
+                <div class="meta-field" style="flex: 1 1 150px;">
+                    <label>Version</label>
+                    <input type="text" id="meta-version" class="mapping-input" onchange="updateMetadata('version', this.value)">
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Date Created</label>
-                    <input type="date" id="meta-created" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('created', this.value)">
+                <div class="meta-field" style="flex: 1 1 200px;">
+                    <label>Date Created</label>
+                    <input type="date" id="meta-created" class="mapping-input" onchange="updateMetadata('created', this.value)">
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Last Modified</label>
-                    <input type="date" id="meta-modified" class="mapping-input" style="width: 100%; box-sizing: border-box; opacity: 0.7; cursor: not-allowed; background: var(--bg-color);" onchange="updateMetadata('modified', this.value)" readonly>
+                <div class="meta-field" style="flex: 1 1 200px;">
+                    <label>Last Modified</label>
+                    <input type="date" id="meta-modified" class="mapping-input" style="background: #f8f9fa; cursor: not-allowed;" readonly>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Copyright Link</label>
-                    <input type="text" id="meta-copyright" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('copyright', this.value)">
+                <div class="meta-field" style="flex: 1 1 100%;">
+                    <label>Copyright Link</label>
+                    <input type="text" id="meta-copyright" class="mapping-input" onchange="updateMetadata('copyright', this.value)">
                 </div>
             </div>
         </div>
 
         <div class="panel">
-            <button class="export-btn" id="export-btn" onclick="exportMidi()">Download Ready MIDI</button>
-            
-            <h3 style="margin-top: 30px;">Event History Log</h3>
+            <button class="export-btn" id="export-btn" onclick="exportMidi()">Download Final MIDI</button>
+            <h3 style="margin-top: 30px;">History Log</h3>
             <div class="log-container">
                 <table>
-                    <thead><tr><th id="log-time-header">Tick</th><th>Div</th><th>Action</th><th>Undo</th></tr></thead>
+                    <thead><tr><th>Tick</th><th>Div</th><th>Action</th><th>Undo</th></tr></thead>
                     <tbody id="log-body"></tbody>
                 </table>
             </div>
@@ -135,32 +120,21 @@
     <div id="page-settings" class="tab-content">
         <div class="panel">
             <h3>Workflow Settings</h3>
-            <div class="settings-row" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
-                <span style="font-weight: bold; color: #f1c40f;">Timeline Display Format</span>
-                <select id="time-format-select" onchange="updateTimeFormat(this.value)" class="mapping-input" style="width: 200px; cursor: pointer; font-size: 1em;">
-                    <option value="ticks" selected>Ticks</option>
+            <div class="settings-row">
+                <span>Timeline Display</span>
+                <select id="time-format-select" onchange="updateTimeFormat(this.value)" class="mapping-input" style="width: 200px;">
+                    <option value="ticks">Ticks</option>
                     <option value="time">Time (MM:SS)</option>
-                    <option value="measures">Measures (Bar:Beat)</option>
+                    <option value="measures">Measures</option>
                 </select>
             </div>
             <div class="settings-row">
-                <span>Enable Dark Mode</span>
-                <label class="switch">
-                    <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode(this.checked)">
-                    <span class="slider-switch swell-bg"></span>
-                </label>
-            </div>
-            <div class="settings-row">
-                <span>Show MIDI Numbers (e.g., Ch 2, 66)</span>
-                <label class="switch">
-                    <input type="checkbox" id="show-midi-toggle" onchange="toggleMidiVals(this.checked)">
-                    <span class="slider-switch swell-bg"></span>
-                </label>
+                <span>Dark Mode</span>
+                <label class="switch"><input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode(this.checked)"><span class="slider-switch"></span></label>
             </div>
         </div>
-
         <div class="panel">
-            <h3>Custom CC Mapping & Pistons</h3>
+            <h3>Custom CC Mapping</h3>
             <div id="settings-mapping-container"></div>
         </div>
     </div>
