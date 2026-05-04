@@ -135,7 +135,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
         if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
         else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
         else if ([40, 82, 68, 48, 50].includes(stop.val)) osc.type = 'sawtooth';
-        else if ([56, 57, 71].includes(stop.val)) osc.type = 'square';
+        else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
         else osc.type = 'square';
         
         osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
@@ -172,8 +172,9 @@ let isUpdatingSwitches = false;
 let hiddenChannels = new Set();
 window.pistonsAffectPercussion = false;
 
-let swellCC = 11;
-let percCC = 10;
+// Fixed CC values to prevent overlapping triggers
+let swellCC = 4;
+let percCC = 12;
 
 const channelColors = [
     '#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e',
@@ -189,7 +190,7 @@ let organStructure = {
         { val: 73, name: "Flute" }, { val: 75, name: "Flageolet" }, { val: 82, name: "Soft Violin" } 
     ],
     "Trumpetmelody (Ch 1)": [ 
-        { val: 68, name: "Viola Bassoon" }, { val: 56, name: "Wooden Trumpet" }, { val: 57, name: "Brass Trumpet" } 
+        { val: 68, name: "Viola Bassoon" }, { val: 56, name: "Wooden Trumpet" }, { val: 61, name: "Brass Trumpet" } 
     ],
     "Accompaniment (Ch 3)": [ 
         { val: 70, name: "Open Flute" }, { val: 48, name: "Strings" }, { val: 11, name: "Stopped Flute" } 
@@ -202,10 +203,10 @@ let organStructure = {
 // 3-State Piston System (activeStops = ON, offStops = OFF, neither = NEUTRAL)
 let pistons = [
     { name: "Pianissimo", activeStops: [19, 82, 73, 75, 11, 70, 68, 58], swell: 127 },
-    { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57], swell: 127 },
-    { name: "Piston Default 1", activeStops: [19, 40, 10, 70, 48, 70, 11, 68, 57, 58, 50], swell: 127 }, 
+    { name: "Forte", activeStops: [8, 19, 40, 82, 73, 75, 11, 70, 48, 68, 56, 58, 57, 61], swell: 127 },
+    { name: "Piston Default 1", activeStops: [19, 40, 10, 70, 48, 70, 11, 68, 57, 61, 58, 50], swell: 127 }, 
     { name: "Piston Default 2", activeStops: [8, 19, 75, 82, 58, 70, 11, 68, 58 ], swell: 64 },
-    { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 70, 11, 48, 56, 68, 57], swell: 127 }, 
+    { name: "Piston Default 3", activeStops: [19, 82, 40, 58, 50, 57, 61, 70, 11, 48, 56, 68], swell: 127 }, 
     { name: "Piston Default 4", activeStops: [], swell: 64 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
@@ -239,7 +240,6 @@ function buildSettingsUI() {
     const container = document.getElementById('settings-mapping-container');
     container.innerHTML = '';
 
-    // --- GLOBAL SETUP (Ranks & CCs) ---
     let globalHtml = `<div class="panel"><h3>Global Setup (Ranks & Channels)</h3>
         <div style="display: flex; flex-wrap: wrap; gap: 10px;">`;
     
@@ -262,13 +262,11 @@ function buildSettingsUI() {
     </div></div></div>`;
     container.innerHTML += globalHtml;
 
-    // --- PISTON CONFIGURATION (3-State Dense Grid) ---
     let piston = pistons[editingPistonIndex];
     
     let pistonHtml = `<div class="panel"><h3>Piston Configuration</h3>
         <div style="display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">`;
     
-    // The subtabs for each piston
     pistons.forEach((p, i) => {
         let activeClass = i === editingPistonIndex ? "background: #f39c12; color: white; border-color: #f39c12;" : "";
         pistonHtml += `<button class="nudge-btn" style="${activeClass}" onclick="editingPistonIndex=${i}; buildSettingsUI();">${p.name}</button>`;
@@ -298,7 +296,6 @@ function buildSettingsUI() {
     container.innerHTML += pistonHtml;
 }
 
-// Generates the colored buttons for 3-state Discord logic
 function buildTriStateBox(name, val, color, state) {
     let offOp = state === -1 ? '1' : '0.3';
     let neutOp = state === 0 ? '1' : '0.3';
@@ -362,7 +359,7 @@ function buildEditorUI() {
     expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
     document.getElementById('col-bass-exp').appendChild(expDiv);
 
-    // REVERTED: Original Full-Width Buttons for Dashboard Pistons
+    // FULL WIDTH BUTTONS FOR DASHBOARD PISTONS
     let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
     pistons.forEach((p, i) => {
         let extraStyle = i === pistons.length - 1 ? "margin-top: 15px; border-color: #e74c3c; color: #e74c3c;" : "";
