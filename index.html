@@ -89,34 +89,32 @@
         
         <div class="panel">
             <h3>Project Metadata</h3>
-            <p style="color: #7f8c8d; margin-bottom: 15px; font-size: 0.9em;">This data is injected seamlessly into a hidden track. It tracks authorship and version history, and can be read by this app whenever the file is imported back in.</p>
+            <p style="color: #7f8c8d; margin-bottom: 25px; font-size: 0.9em;">This data is injected seamlessly into a hidden track to preserve authorship and version history. It will be automatically populated when the file is re-imported.</p>
             
-            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
-                <div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 10px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Song Title</label>
-                    <input type="text" id="meta-title" class="mapping-input" onchange="updateMetadata('title', this.value)">
+                    <input type="text" id="meta-title" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('title', this.value)">
                 </div>
-                <div style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Arranger / Composer</label>
-                    <input type="text" id="meta-arranger" class="mapping-input" onchange="updateMetadata('arranger', this.value)">
+                    <input type="text" id="meta-arranger" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('arranger', this.value)" placeholder="e.g. John Doe">
                 </div>
-                <div style="flex: 1 1 100px; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Version</label>
-                    <input type="text" id="meta-version" class="mapping-input" onchange="updateMetadata('version', this.value)">
+                    <input type="text" id="meta-version" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('version', this.value)">
                 </div>
-            </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-                <div style="flex: 1 1 150px; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Date Created</label>
-                    <input type="date" id="meta-created" class="mapping-input" onchange="updateMetadata('created', this.value)">
+                    <input type="date" id="meta-created" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('created', this.value)">
                 </div>
-                <div style="flex: 1 1 150px; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Last Modified</label>
-                    <input type="date" id="meta-modified" class="mapping-input" onchange="updateMetadata('modified', this.value)" readonly style="opacity: 0.7; cursor: not-allowed; background: var(--bg-color);">
+                    <input type="date" id="meta-modified" class="mapping-input" style="width: 100%; box-sizing: border-box; opacity: 0.7; cursor: not-allowed; background: var(--bg-color);" onchange="updateMetadata('modified', this.value)" readonly>
                 </div>
-                <div style="flex: 2 1 250px; display: flex; flex-direction: column; gap: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85em; font-weight: bold; color: var(--text-color);">Copyright Link</label>
-                    <input type="text" id="meta-copyright" class="mapping-input" onchange="updateMetadata('copyright', this.value)">
+                    <input type="text" id="meta-copyright" class="mapping-input" style="width: 100%; box-sizing: border-box;" onchange="updateMetadata('copyright', this.value)">
                 </div>
             </div>
         </div>
