@@ -212,7 +212,7 @@ window.nudgeSeconds = function(amountSec) {
 };
 
 // ==========================================
-// 2. CORE EDITOR LOGIC & STATE (WITH DEFAULTS)
+// 2. CORE EDITOR LOGIC & STATE
 // ==========================================
 let currentMidi = null;
 let fileName = "wurlitzer_output";
@@ -230,7 +230,6 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-// DEFAULT FACTORY SETTINGS
 const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 12;
 
@@ -262,7 +261,6 @@ const DEFAULT_PISTONS = [
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
-// LIVE STATE VARIABLES
 let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
@@ -315,9 +313,6 @@ function toggleMidiVals(show) {
     else document.body.classList.add('hide-midi-vals');
 }
 
-// ==========================================
-// SYSTEM TRACK FINGERPRINTING HELPERS
-// ==========================================
 function getSystemTrack() {
     if (!currentMidi) return null;
     return currentMidi.tracks.find(t => 
@@ -336,9 +331,6 @@ function getOrCreateSystemTrack() {
     return trk;
 }
 
-// ==========================================
-// DYNAMIC RANK ADD/REMOVE LOGIC
-// ==========================================
 window.addRank = function(manualKey) {
     let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
     let newVal = 21; 
@@ -359,9 +351,6 @@ window.deleteRank = function(manualKey, index) {
     }
 };
 
-// ==========================================
-// NEW VISIBILITY & UI ENGINE (SETTINGS)
-// ==========================================
 function buildSettingsUI() {
     const container = document.getElementById('settings-mapping-container');
     container.innerHTML = '';
@@ -543,7 +532,7 @@ window.openTab = function(tabId, btnElement) {
 };
 
 // ==========================================
-// 3. IMPORT INTERCEPTOR & MODAL LOGIC
+// 3. IMPORT INTERCEPTOR & ROUTING ENGINE
 // ==========================================
 function getUnknownStops(track) {
     if (!track) return [];
@@ -657,7 +646,7 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     if (systemTrack) {
         document.getElementById('import-modal').style.display = 'flex';
     } else {
-        finalizeImport(); 
+        buildRoutingUI(); 
     }
 });
 
@@ -669,18 +658,17 @@ window.handleImportChoice = function(choice) {
         if (sysTrack) {
             currentMidi.tracks = currentMidi.tracks.filter(t => t !== sysTrack);
         }
-        finalizeImport();
+        buildRoutingUI();
     } else {
         let unknowns = getUnknownStops(sysTrack);
         if (unknowns.length > 0) {
             showRemapModal(unknowns);
         } else {
-            finalizeImport();
+            buildRoutingUI();
         }
     }
 };
 
-// BULK ACTION PROCESSING
 window.processRemap = function(unknowns) {
     let sysTrack = getSystemTrack();
     let oldToNewCCs = {};
@@ -689,7 +677,7 @@ window.processRemap = function(unknowns) {
         let act = document.getElementById(`action-${val}`).value;
 
         if (act === 'ignore') {
-            return; // Do nothing, just leave it in the track unmapped
+            return; 
         } 
         else if (act === 'delete') {
             if (sysTrack) {
@@ -709,7 +697,7 @@ window.processRemap = function(unknowns) {
             }
             if (existingStop) {
                 existingStop.val = val;
-                oldToNewCCs[oldCC] = val; // Track for piston updating
+                oldToNewCCs[oldCC] = val; 
             }
         } 
         else if (act === 'add') {
@@ -721,7 +709,6 @@ window.processRemap = function(unknowns) {
 
     updateGlobalStopList();
 
-    // Specific logic for CC swapping
     pistons.forEach(p => {
         for (let oldCC in oldToNewCCs) {
             let oldInt = parseInt(oldCC);
@@ -741,12 +728,12 @@ window.processRemap = function(unknowns) {
     document.getElementById('remap-modal').style.display = 'none';
     buildSettingsUI();
     buildEditorUI();
-    finalizeImport();
+    buildRoutingUI();
 };
 
 window.ignoreAllRemap = function() {
     document.getElementById('remap-modal').style.display = 'none';
-    finalizeImport();
+    buildRoutingUI();
 };
 
 window.deleteAllRemap = function(unknowns) {
@@ -761,6 +748,71 @@ window.deleteAllRemap = function(unknowns) {
         });
     }
     document.getElementById('remap-modal').style.display = 'none';
+    buildRoutingUI();
+};
+
+// ==========================================
+// 4. NEW: PRE-EDITOR ROUTING ENGINE
+// ==========================================
+window.buildRoutingUI = function() {
+    let activeChannels = new Set();
+    let channelNames = {};
+    
+    currentMidi.tracks.forEach(t => {
+        if (t.notes.length > 0 && t.channel !== 15) {
+            activeChannels.add(t.channel);
+            if (!channelNames[t.channel] && t.name) channelNames[t.channel] = t.name;
+        }
+    });
+
+    let routingHtml = '';
+    Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
+        let chNameExt = channelNames[ch] ? ` (${channelNames[ch]})` : '';
+        let color = channelColors[ch % 16];
+        
+        routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+            <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
+            <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
+                <option value="1" ${ch === 0 ? 'selected' : ''}>Trumpetmelody (Out Ch 1)</option>
+                <option value="2" ${ch === 1 ? 'selected' : ''}>Countermelody (Out Ch 2)</option>
+                <option value="3" ${ch === 2 ? 'selected' : ''}>Accompaniment (Out Ch 3)</option>
+                <option value="4" ${ch === 3 ? 'selected' : ''}>Bass (Out Ch 4)</option>
+                <option value="ignore">🗑️ Ignore / Mute Track</option>
+            </select>
+        </div>`;
+    });
+
+    document.getElementById('routing-list').innerHTML = routingHtml;
+    document.getElementById('upload-panel').style.display = 'none';
+    document.getElementById('routing-panel').style.display = 'block';
+};
+
+window.applyRoutingAndStart = function() {
+    let activeChannels = new Set();
+    currentMidi.tracks.forEach(t => {
+        if (t.notes.length > 0 && t.channel !== 15) activeChannels.add(t.channel);
+    });
+
+    let channelMap = {};
+    Array.from(activeChannels).forEach(ch => {
+        let select = document.getElementById(`route-ch-${ch}`);
+        if(select) channelMap[ch] = select.value;
+    });
+
+    let tracksToRemove = [];
+    currentMidi.tracks.forEach(t => {
+        if (t.channel !== 15 && channelMap[t.channel] !== undefined) {
+            if (channelMap[t.channel] === 'ignore') {
+                tracksToRemove.push(t);
+            } else {
+                let targetCh = parseInt(channelMap[t.channel]) - 1;
+                t.channel = targetCh;
+            }
+        }
+    });
+
+    currentMidi.tracks = currentMidi.tracks.filter(t => !tracksToRemove.includes(t));
+    
     finalizeImport();
 };
 
@@ -770,6 +822,7 @@ function finalizeImport() {
         if (t.notes.length > 0) activeChannels.add(t.channel);
         t.notes.forEach(n => { if(n.ticks + n.durationTicks > maxTicks) maxTicks = n.ticks + n.durationTicks; if(n.midi < minMidiNote) minMidiNote = n.midi; if(n.midi > maxMidiNote) maxMidiNote = n.midi; });
     });
+    
     const filtersDiv = document.getElementById('channel-filters');
     filtersDiv.innerHTML = '<strong style="display:flex; align-items:center; margin-right:10px; font-size:0.9em;">Tracks:</strong>';
     Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
@@ -777,6 +830,7 @@ function finalizeImport() {
         btn.onclick = () => { if (hiddenChannels.has(ch)) { hiddenChannels.delete(ch); btn.classList.remove('inactive'); } else { hiddenChannels.add(ch); btn.classList.add('inactive'); } draw(); };
         filtersDiv.appendChild(btn);
     });
+    
     const slider = document.getElementById('tick-slider'); slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
     document.getElementById('zoom-slider').disabled = false; 
     
@@ -935,10 +989,24 @@ function draw() {
     ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo((currentTick - st) * scaleX, 0); ctx.lineTo((currentTick - st) * scaleX, rect.height); ctx.stroke();
 }
 
-window.exportMidi = function() { if (!currentMidi) return; const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click(); };
+window.exportMidi = function() { 
+    if (!currentMidi) return; 
+    
+    // Safety sync: Ensure the track's channel matches its internal events before export
+    currentMidi.tracks.forEach(t => {
+        t.notes.forEach(n => n.channel = t.channel);
+        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
+    });
+
+    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+    const a = document.createElement("a"); 
+    a.href = URL.createObjectURL(blob); 
+    a.download = fileName + "_W166.mid"; 
+    a.click(); 
+};
 
 // ==========================================
-// 3. WINDOW BINDINGS FOR HTML INTERACTION
+// 5. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.togglePlay = togglePlay;
 window.stopPlayback = stopPlayback;
