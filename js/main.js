@@ -937,4 +937,12 @@ function draw() {
 
 window.exportMidi = function() { if (!currentMidi) return; const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click(); };
 
+// ==========================================
+// 3. WINDOW BINDINGS FOR HTML INTERACTION
+// ==========================================
+window.togglePlay = togglePlay;
+window.stopPlayback = stopPlayback;
+window.toggleDarkMode = toggleDarkMode;
+window.toggleMidiVals = toggleMidiVals;
+
 buildSettingsUI(); buildEditorUI();
