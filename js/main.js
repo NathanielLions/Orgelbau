@@ -228,16 +228,12 @@ const channelColors = [
     '#ff9ff3', '#8e44ad', '#48dbfb', '#1dd1a1', '#f368e0', '#ff9f43', '#0abde3', '#10ac84'
 ];
 
-const groupColors = { "Percussion": "#1abc9c", "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
+const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
 const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 12;
 
-// RE-MAPPED TO USER'S EXACT SPECIFICATIONS
 const DEFAULT_ORGAN_STRUCTURE = {
-    "Percussion (Ch 1)": [ 
-        { val: 15, name: "Percussion Notes", visible: true } 
-    ],
     "Accompaniment (Ch 2)": [ 
         { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
     ],
@@ -256,12 +252,12 @@ const DEFAULT_ORGAN_STRUCTURE = {
 };
 
 const DEFAULT_PISTONS = [
-    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58], swell: 64 }, 
-    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
-    { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58], swell: 127 }, 
-    { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58], swell: 127 },
-    { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, 
-    { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
+    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58, 12], swell: 64 }, 
+    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
+    { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58, 12], swell: 127 }, 
+    { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58, 12], swell: 127 },
+    { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 }, 
+    { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
@@ -511,7 +507,7 @@ function buildEditorUI() {
         
         if (shortMan === "Countermelody") { document.getElementById('col-countermelody').appendChild(groupDiv); }
         else if (shortMan === "Accompaniment" || shortMan === "Trumpetmelody") { document.getElementById('col-accomp-trumpet').appendChild(groupDiv); }
-        else if (shortMan === "Bass" || shortMan === "Percussion") { document.getElementById('col-bass-exp').appendChild(groupDiv); }
+        else if (shortMan === "Bass") { document.getElementById('col-bass-exp').appendChild(groupDiv); }
     }
 
     const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
