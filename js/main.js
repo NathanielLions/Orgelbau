@@ -160,7 +160,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 }
 
 // ==========================================
-// 2. CORE EDITOR LOGIC & STATE
+// 2. CORE EDITOR LOGIC & STATE (WITH DEFAULTS)
 // ==========================================
 let currentMidi = null;
 let fileName = "wurlitzer_output";
@@ -171,9 +171,6 @@ let isUpdatingSwitches = false;
 
 let hiddenChannels = new Set();
 
-let swellCC = 4;
-let percCC = 12;
-
 const channelColors = [
     '#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e',
     '#ff9ff3', '#8e44ad', '#48dbfb', '#1dd1a1', '#f368e0', '#ff9f43', '#0abde3', '#10ac84'
@@ -181,7 +178,11 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-let organStructure = {
+// DEFAULT FACTORY SETTINGS
+const DEFAULT_SWELL_CC = 4;
+const DEFAULT_PERC_CC = 12;
+
+const DEFAULT_ORGAN_STRUCTURE = {
     "Countermelody (Ch 2)": [ 
         { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
         { val: 20, name: "Undamaris", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
@@ -199,8 +200,7 @@ let organStructure = {
     ]
 };
 
-// 3-State Piston System (Updated per images)
-let pistons = [
+const DEFAULT_PISTONS = [
     { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58], swell: 64 }, 
     { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
     { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58], swell: 127 }, 
@@ -209,6 +209,12 @@ let pistons = [
     { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
+
+// LIVE STATE VARIABLES
+let swellCC = DEFAULT_SWELL_CC;
+let percCC = DEFAULT_PERC_CC;
+let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
+let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
 
 function updateGlobalStopList() {
     let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
@@ -223,6 +229,27 @@ function updateGlobalStopList() {
 updateGlobalStopList();
 
 let editingPistonIndex = 0;
+
+function resetToDefaults() {
+    if (confirm("⚠️ Are you sure you want to restore the default Wurlitzer 166 settings? \n\nThis will erase any custom stops, remappings, and piston modifications you have made!")) {
+        swellCC = DEFAULT_SWELL_CC;
+        percCC = DEFAULT_PERC_CC;
+        organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
+        pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
+        editingPistonIndex = 0;
+        
+        updateGlobalStopList();
+        buildSettingsUI();
+        buildEditorUI();
+        
+        if (currentMidi) {
+            syncSwitchesToTimeline(document.getElementById('tick-slider').value);
+            renderLog();
+            draw();
+        }
+        alert("Success: Factory settings have been restored.");
+    }
+}
 
 function toggleDarkMode(isDark) {
     if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
@@ -351,6 +378,12 @@ function buildSettingsUI() {
 
     pistonHtml += `</div></div>`;
     container.innerHTML += pistonHtml;
+
+    // ADD FACTORY RESET BUTTON AT THE BOTTOM
+    container.innerHTML += `<div style="margin-top: 25px; text-align: center; border-top: 1px solid var(--border-color); padding-top: 25px;">
+        <button class="nudge-btn" style="background: #c0392b; color: white; padding: 12px 24px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 5px;" onclick="resetToDefaults()">⚠️ Reset to Default W166 Settings</button>
+        <p style="color: #7f8c8d; font-size: 0.85em; margin-top: 10px;">This will safely restore all original ranks, CC values, and piston configurations.</p>
+    </div>`;
 }
 
 function buildTriStateBox(name, val, state, type = 'stop') {
@@ -848,6 +881,6 @@ function exportMidi() { if (!currentMidi) return; const blob = new Blob([current
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
 window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons; window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
-window.toggleRemapRow = toggleRemapRow; window.processRemap = processRemap; window.ignoreAllRemap = ignoreAllRemap; window.deleteAllRemap = deleteAllRemap; window.addRank = addRank; window.deleteRank = deleteRank;
+window.toggleRemapRow = toggleRemapRow; window.processRemap = processRemap; window.ignoreAllRemap = ignoreAllRemap; window.deleteAllRemap = deleteAllRemap; window.addRank = addRank; window.deleteRank = deleteRank; window.resetToDefaults = resetToDefaults;
 
 buildSettingsUI(); buildEditorUI();
