@@ -28,7 +28,10 @@
         </div>
 
         <div id="routing-panel" class="panel" style="display: none;">
-            <h3>Track Routing & Channel Setup</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Track Routing & Channel Setup</h3>
+                <button class="nudge-btn" onclick="hardReset()" style="background: #e74c3c; color: white; padding: 8px 16px; font-size: 0.9em; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">↺ Start Over</button>
+            </div>
             <p style="color: #7f8c8d; margin-bottom: 20px;">Assign your imported MIDI channels to the correct Wurlitzer manuals. This ensures the exported file has the correct channel structure (Ch 1-4) and descriptive DAW instruments (e.g. Electric Piano, Trumpet).</p>
             
             <div id="routing-list" style="display: flex; flex-direction: column; gap: 8px;">
