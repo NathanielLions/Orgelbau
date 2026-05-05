@@ -174,7 +174,7 @@ function getTodayString() {
 
 let songMetadata = {
     title: "",
-    arranger: "", // Blank for professional use
+    arranger: "",
     version: "1.0",
     created: getTodayString(),
     modified: getTodayString(),
@@ -358,20 +358,17 @@ function loadPreferences() {
         try {
             const prefs = JSON.parse(saved);
             
-            // Apply Dark Mode
             if (document.getElementById('dark-mode-toggle')) {
                 document.getElementById('dark-mode-toggle').checked = prefs.darkMode;
                 document.documentElement.setAttribute('data-theme', prefs.darkMode ? 'dark' : 'light');
             }
             
-            // Apply Show MIDI Setting
             if (document.getElementById('show-midi-toggle')) {
                 document.getElementById('show-midi-toggle').checked = prefs.showMidi;
                 if (prefs.showMidi) document.body.classList.remove('hide-midi-vals');
                 else document.body.classList.add('hide-midi-vals');
             }
             
-            // Apply Time Format
             if (document.getElementById('time-format-select')) {
                 document.getElementById('time-format-select').value = prefs.timeFormat || 'ticks';
                 timeDisplayFormat = prefs.timeFormat || 'ticks';
@@ -413,6 +410,7 @@ function getOrCreateSystemTrack() {
         trk = currentMidi.addTrack();
         trk.channel = 15;
     }
+    trk.channel = 15; // Ensure channel property stays accurate
     return trk;
 }
 
@@ -730,7 +728,12 @@ window.handleImportChoice = function(choice) {
 
     if (choice === 'clear') {
         if (sysTrack) {
-            currentMidi.tracks = currentMidi.tracks.filter(t => t !== sysTrack);
+            // Safely remove the sysTrack without completely recreating the array
+            for (let i = currentMidi.tracks.length - 1; i >= 0; i--) {
+                if (currentMidi.tracks[i] === sysTrack) {
+                    currentMidi.tracks.splice(i, 1);
+                }
+            }
         }
         buildRoutingUI();
     } else {
@@ -757,7 +760,10 @@ window.processRemap = function(unknowns) {
             if (sysTrack) {
                 [80, 81].forEach(cc => {
                     if(sysTrack.controlChanges[cc]) {
-                        sysTrack.controlChanges[cc] = sysTrack.controlChanges[cc].filter(e => Math.round(e.value * 127) !== val);
+                        let arr = sysTrack.controlChanges[cc];
+                        for(let i = arr.length - 1; i >= 0; i--) {
+                            if (Math.round(arr[i].value * 127) === val) arr.splice(i, 1);
+                        }
                     }
                 });
             }
@@ -816,7 +822,10 @@ window.deleteAllRemap = function(unknowns) {
         unknowns.forEach(val => {
             [80, 81].forEach(cc => {
                 if(sysTrack.controlChanges[cc]) {
-                    sysTrack.controlChanges[cc] = sysTrack.controlChanges[cc].filter(e => Math.round(e.value * 127) !== val);
+                    let arr = sysTrack.controlChanges[cc];
+                    for (let i = arr.length - 1; i >= 0; i--) {
+                        if (Math.round(arr[i].value * 127) === val) arr.splice(i, 1);
+                    }
                 }
             });
         });
@@ -976,7 +985,10 @@ window.applyRoutingAndStart = function() {
         }
     });
 
-    currentMidi.tracks = currentMidi.tracks.filter(t => !tracksToRemove.includes(t));
+    // Splice array safely instead of overwriting reference
+    for (let i = currentMidi.tracks.length - 1; i >= 0; i--) {
+        if (tracksToRemove.includes(currentMidi.tracks[i])) currentMidi.tracks.splice(i, 1);
+    }
     
     finalizeImport();
 };
@@ -1088,18 +1100,24 @@ window.applyRegistrationState = function(pistonIndex) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
+    // Safely delete surrounding events using splice (Prevents memory reference break)
     [swellCC, 80, 81].forEach(cc => { 
         if (track.controlChanges[cc]) {
-            track.controlChanges[cc] = track.controlChanges[cc].filter(e => Math.abs(e.ticks - baseTick) > 40); 
+            let arr = track.controlChanges[cc];
+            for (let i = arr.length - 1; i >= 0; i--) {
+                if (Math.abs(arr[i].ticks - baseTick) <= 40) {
+                    arr.splice(i, 1);
+                }
+            }
         }
     });
     
     let currentOffset = 0; 
     
+    // Use official Tone.js addCC object instantiation
     if (p.swellState !== 0) {
         let swellVal = p.swellState === 1 ? 127 : 64;
-        if (!track.controlChanges[swellCC]) track.controlChanges[swellCC] = [];
-        track.controlChanges[swellCC].push({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+        track.addCC({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
         currentOffset++;
     }
     
@@ -1111,13 +1129,11 @@ window.applyRegistrationState = function(pistonIndex) {
         else if (p.offStops.includes(val)) targetCC = 80;
         
         if (targetCC !== null) {
-            if (!track.controlChanges[targetCC]) track.controlChanges[targetCC] = [];
-            track.controlChanges[targetCC].push({ ticks: baseTick + currentOffset, number: targetCC, value: val / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+            track.addCC({ ticks: baseTick + currentOffset, number: targetCC, value: val / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
             currentOffset++;
         }
     });
     
-    [swellCC, 80, 81].forEach(cc => { if(track.controlChanges[cc]) track.controlChanges[cc].sort((a,b) => a.ticks - b.ticks); });
     let syncTick = Math.min(parseInt(document.getElementById('tick-slider').max), baseTick + currentOffset);
     document.getElementById('tick-slider').value = syncTick; 
     updateDisplays(syncTick);
@@ -1130,16 +1146,36 @@ function addEvent(cc, val, label, manual) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    [swellCC, 80, 81].forEach(checkCc => { if (track.controlChanges[checkCc]) track.controlChanges[checkCc] = track.controlChanges[checkCc].filter(e => !( ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val)) && Math.abs(e.ticks - baseTick) <= 10)); });
-    if (!track.controlChanges[cc]) track.controlChanges[cc] = [];
-    let safeTick = baseTick; while (track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
-    track.controlChanges[cc].push({ ticks: safeTick, number: cc, value: val / 127, time: currentMidi.header.ticksToSeconds(safeTick) });
-    track.controlChanges[cc].sort((a, b) => a.ticks - b.ticks); renderLog(); draw(); 
+    // Splice conflict deletion
+    [swellCC, 80, 81].forEach(checkCc => { 
+        if (track.controlChanges[checkCc]) {
+            let arr = track.controlChanges[checkCc];
+            for(let i = arr.length - 1; i >= 0; i--) {
+                let e = arr[i];
+                let isConflict = ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val));
+                if (isConflict && Math.abs(e.ticks - baseTick) <= 10) arr.splice(i, 1);
+            }
+        }
+    });
+
+    let safeTick = baseTick; 
+    while (track.controlChanges[cc] && track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
+    
+    // Official addCC instantiation
+    track.addCC({ ticks: safeTick, number: cc, value: val / 127, time: currentMidi.header.ticksToSeconds(safeTick) });
+    renderLog(); draw(); 
 }
 
 window.removeEvent = function(cc, val, tick) {
     let track = getSystemTrack();
-    if (track && track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => !(e.ticks === tick && Math.round(e.value * 127) === val));
+    if (track && track.controlChanges[cc]) {
+        let arr = track.controlChanges[cc];
+        for (let i = arr.length - 1; i >= 0; i--) {
+            if (arr[i].ticks === tick && Math.round(arr[i].value * 127) === val) {
+                arr.splice(i, 1);
+            }
+        }
+    }
     renderLog(); syncSwitchesToTimeline(parseInt(document.getElementById('tick-slider').value)); draw();
 };
 
@@ -1218,27 +1254,35 @@ function draw() {
 window.exportMidi = function() { 
     if (!currentMidi) return; 
     
-    // FINAL METADATA INJECTION
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
     let sysTrack = getOrCreateSystemTrack();
-    sysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
-    currentMidi.header.name = songMetadata.title;
-    currentMidi.name = songMetadata.title;
     
+    // SANITIZE ENCODING: Strips non-ASCII characters to prevent fatal byte-length VLQ mismatches
+    let safeJsonString = JSON.stringify(songMetadata).replace(/[^\x20-\x7E]/g, '');
+    sysTrack.name = "W166_META:" + safeJsonString;
+    
+    let safeHeaderString = (songMetadata.title || "Export").replace(/[^\x20-\x7E]/g, '');
+    currentMidi.header.name = safeHeaderString;
+    currentMidi.name = safeHeaderString;
+    
+    // Strip manual channel overwriting to prevent class corruption
     currentMidi.tracks.forEach(t => {
-        t.notes.forEach(n => n.channel = t.channel);
-        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
+        t.channel = parseInt(t.channel) || 0; 
     });
 
-    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
-    const a = document.createElement("a"); 
-    a.href = URL.createObjectURL(blob); 
-    
-    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    a.download = safeName + "_mapped.mid"; 
-    a.click(); 
+    try {
+        const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+        const a = document.createElement("a"); 
+        a.href = URL.createObjectURL(blob); 
+        
+        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = safeName + "_mapped.mid"; 
+        a.click(); 
+    } catch (e) {
+        alert("Export Encoding Error: " + e.message);
+    }
 };
 
 // Start Up
@@ -1248,6 +1292,8 @@ buildMetadataUI();
 loadPreferences();
 buildSettingsUI();
 buildEditorUI();
-// Bind transport controls to the global window so HTML buttons can click them
+
+// Bind transport controls to the global window
 window.togglePlay = togglePlay;
 window.stopPlayback = stopPlayback;
+window.hardReset = hardReset;
