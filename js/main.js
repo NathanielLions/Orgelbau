@@ -15,9 +15,9 @@ async function fetchSoundfont() {
         document.getElementById('audio-status').innerText = "⏳ Loading Wurlitzer166.sf2...";
         const response = await fetch(SOUNDFONT_URL);
         const arrayBuffer = await response.arrayBuffer();
-        document.getElementById('audio-status').innerText = "";
+        document.getElementById('audio-status').innerText = "🔊 Audio Ready";
     } catch (err) {
-        document.getElementById('audio-status').innerText = "";
+        document.getElementById('audio-status').innerText = "⚠️ Audio Offline";
     }
 }
 
@@ -160,7 +160,44 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 }
 
 // ==========================================
-// TIME & DISPLAY ENGINE
+// 2. PROJECT METADATA ENGINE
+// ==========================================
+function getTodayString() {
+    let d = new Date();
+    let month = '' + (d.getMonth() + 1);
+    let day = '' + d.getDate();
+    let year = d.getFullYear();
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+    return [year, month, day].join('-');
+}
+
+let songMetadata = {
+    title: "",
+    arranger: "", // Blank for professional use
+    version: "1.0",
+    created: getTodayString(),
+    modified: getTodayString(),
+    copyright: "https://nathaniellions.github.io/MIDIMapper166/"
+};
+
+function buildMetadataUI() {
+    if (document.getElementById('meta-title')) document.getElementById('meta-title').value = songMetadata.title || "";
+    if (document.getElementById('meta-arranger')) document.getElementById('meta-arranger').value = songMetadata.arranger || "";
+    if (document.getElementById('meta-version')) document.getElementById('meta-version').value = songMetadata.version || "1.0";
+    if (document.getElementById('meta-created')) document.getElementById('meta-created').value = songMetadata.created || getTodayString();
+    if (document.getElementById('meta-modified')) document.getElementById('meta-modified').value = songMetadata.modified || getTodayString();
+    if (document.getElementById('meta-copyright')) document.getElementById('meta-copyright').value = songMetadata.copyright || "";
+}
+
+window.updateMetadata = function(key, val) {
+    songMetadata[key] = val;
+    songMetadata.modified = getTodayString();
+    if (document.getElementById('meta-modified')) document.getElementById('meta-modified').value = songMetadata.modified;
+};
+
+// ==========================================
+// 3. TIME & DISPLAY ENGINE
 // ==========================================
 let timeDisplayFormat = 'ticks'; 
 
@@ -170,10 +207,11 @@ window.updateTimeFormat = function(format) {
     if (format === 'time') lbl = "Time";
     if (format === 'measures') lbl = "Meas";
     
-    document.getElementById('time-label').innerText = lbl;
-    document.getElementById('log-time-header').innerText = lbl;
+    if (document.getElementById('time-label')) document.getElementById('time-label').innerText = lbl;
+    if (document.getElementById('log-time-header')) document.getElementById('log-time-header').innerText = lbl;
+    savePreferences();
     
-    let currentTick = parseInt(document.getElementById('tick-slider').value) || 0;
+    let currentTick = document.getElementById('tick-slider') ? parseInt(document.getElementById('tick-slider').value) || 0 : 0;
     updateDisplays(currentTick);
     renderLog(); 
 };
@@ -195,7 +233,7 @@ function formatTimeDisplay(ticks) {
 }
 
 function updateDisplays(tickValue) {
-    document.getElementById('current-tick').innerText = formatTimeDisplay(tickValue);
+    if(document.getElementById('current-tick')) document.getElementById('current-tick').innerText = formatTimeDisplay(tickValue);
 }
 
 window.nudgeTicks = function(amount) { nudge(amount); };
@@ -212,7 +250,7 @@ window.nudgeSeconds = function(amountSec) {
 };
 
 // ==========================================
-// 2. CORE EDITOR LOGIC & STATE
+// 4. CORE EDITOR LOGIC & STATE
 // ==========================================
 let currentMidi = null;
 let fileName = "wurlitzer_output";
@@ -266,47 +304,6 @@ let percCC = DEFAULT_PERC_CC;
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
 let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
 
-// ==========================================
-// 2.5 PROJECT METADATA ENGINE
-// ==========================================
-function getTodayString() {
-    let d = new Date();
-    let month = '' + (d.getMonth() + 1);
-    let day = '' + d.getDate();
-    let year = d.getFullYear();
-    if (month.length < 2) month = '0' + month;
-    if (day.length < 2) day = '0' + day;
-    return [year, month, day].join('-');
-}
-
-let songMetadata = {
-    title: "Untitled Project",
-    arranger: "",
-    version: "1.0",
-    created: getTodayString(),
-    modified: getTodayString(),
-    copyright: "https://nathaniellions.github.io/MIDIMapper166/"
-};
-
-function buildMetadataUI() {
-    document.getElementById('meta-title').value = songMetadata.title;
-    document.getElementById('meta-arranger').value = songMetadata.arranger;
-    document.getElementById('meta-version').value = songMetadata.version;
-    document.getElementById('meta-created').value = songMetadata.created;
-    document.getElementById('meta-modified').value = songMetadata.modified;
-    document.getElementById('meta-copyright').value = songMetadata.copyright;
-}
-
-window.updateMetadata = function(key, val) {
-    songMetadata[key] = val;
-    songMetadata.modified = getTodayString();
-    document.getElementById('meta-modified').value = songMetadata.modified;
-};
-
-// ==========================================
-// CONTINUE LOGIC
-// ==========================================
-
 function updateGlobalStopList() {
     let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
     pistons.forEach(p => {
@@ -343,16 +340,63 @@ window.resetToDefaults = function() {
     }
 };
 
-function toggleDarkMode(isDark) {
-    if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
-    else document.documentElement.removeAttribute('data-theme');
-    draw(); 
+// ==========================================
+// 5. LOCAL PREFERENCES
+// ==========================================
+function savePreferences() {
+    const prefs = {
+        darkMode: document.getElementById('dark-mode-toggle') ? document.getElementById('dark-mode-toggle').checked : false,
+        showMidi: document.getElementById('show-midi-toggle') ? document.getElementById('show-midi-toggle').checked : false,
+        timeFormat: timeDisplayFormat
+    };
+    localStorage.setItem('w166_prefs', JSON.stringify(prefs));
 }
 
-function toggleMidiVals(show) {
+function loadPreferences() {
+    const saved = localStorage.getItem('w166_prefs');
+    if (saved) {
+        try {
+            const prefs = JSON.parse(saved);
+            
+            // Apply Dark Mode
+            if (document.getElementById('dark-mode-toggle')) {
+                document.getElementById('dark-mode-toggle').checked = prefs.darkMode;
+                document.documentElement.setAttribute('data-theme', prefs.darkMode ? 'dark' : 'light');
+            }
+            
+            // Apply Show MIDI Setting
+            if (document.getElementById('show-midi-toggle')) {
+                document.getElementById('show-midi-toggle').checked = prefs.showMidi;
+                if (prefs.showMidi) document.body.classList.remove('hide-midi-vals');
+                else document.body.classList.add('hide-midi-vals');
+            }
+            
+            // Apply Time Format
+            if (document.getElementById('time-format-select')) {
+                document.getElementById('time-format-select').value = prefs.timeFormat || 'ticks';
+                timeDisplayFormat = prefs.timeFormat || 'ticks';
+                let lbl = "Tick";
+                if (timeDisplayFormat === 'time') lbl = "Time";
+                if (timeDisplayFormat === 'measures') lbl = "Meas";
+                if (document.getElementById('time-label')) document.getElementById('time-label').innerText = lbl;
+                if (document.getElementById('log-time-header')) document.getElementById('log-time-header').innerText = lbl;
+            }
+        } catch(e) { console.warn("Could not load preferences."); }
+    }
+}
+
+window.toggleDarkMode = function(isDark) {
+    if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    savePreferences();
+    draw(); 
+};
+
+window.toggleMidiVals = function(show) {
     if (show) document.body.classList.remove('hide-midi-vals');
     else document.body.classList.add('hide-midi-vals');
-}
+    savePreferences();
+};
 
 function getSystemTrack() {
     if (!currentMidi) return null;
@@ -372,6 +416,9 @@ function getOrCreateSystemTrack() {
     return trk;
 }
 
+// ==========================================
+// 6. SETTINGS & MAPPING UI
+// ==========================================
 window.addRank = function(manualKey) {
     let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
     let newVal = 21; 
@@ -394,6 +441,7 @@ window.deleteRank = function(manualKey, index) {
 
 function buildSettingsUI() {
     const container = document.getElementById('settings-mapping-container');
+    if(!container) return;
     container.innerHTML = '';
 
     let globalHtml = `<div class="panel"><h3>Global Setup (Ranks & Channels)</h3>
@@ -527,7 +575,11 @@ window.updateExpMapping = function(type, newVal) {
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 };
 
+// ==========================================
+// 7. DASHBOARD EDITOR UI
+// ==========================================
 function buildEditorUI() {
+    if(!document.getElementById('col-countermelody')) return;
     document.getElementById('col-countermelody').innerHTML = '';
     document.getElementById('col-accomp-trumpet').innerHTML = '';
     document.getElementById('col-bass-exp').innerHTML = '';
@@ -573,7 +625,7 @@ window.openTab = function(tabId, btnElement) {
 };
 
 // ==========================================
-// 3. IMPORT INTERCEPTOR & ROUTING ENGINE
+// 8. IMPORT INTERCEPTOR & REMAP MODAL
 // ==========================================
 function getUnknownStops(track) {
     if (!track) return [];
@@ -671,32 +723,6 @@ function showRemapModal(unknowns) {
     modal.innerHTML = html;
     modal.style.display = 'flex';
 }
-
-window.onload = () => { 
-    fetchSoundfont(); 
-    createImportModal();
-    buildMetadataUI();
-};
-
-window.hardReset = function() {
-    if(confirm("Are you sure? This will clear all current mapping work and return to the upload screen.")) {
-        location.reload();
-    }
-};
-
-document.getElementById('midi-upload').addEventListener('change', async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
-    currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
-    
-    let systemTrack = getSystemTrack();
-    
-    if (systemTrack) {
-        document.getElementById('import-modal').style.display = 'flex';
-    } else {
-        buildRoutingUI(); 
-    }
-});
 
 window.handleImportChoice = function(choice) {
     document.getElementById('import-modal').style.display = 'none';
@@ -800,8 +826,71 @@ window.deleteAllRemap = function(unknowns) {
 };
 
 // ==========================================
-// 4. PRE-EDITOR ROUTING ENGINE
+// 9. ROUTING, IMPORT & SOFT RESET
 // ==========================================
+window.hardReset = function() {
+    if(confirm("Are you sure? This will clear the current file and return to the upload screen. Your preferences will be saved.")) {
+        if(isPlaying) stopPlayback();
+        
+        currentMidi = null;
+        fileName = "wurlitzer_output";
+        scheduledNotes.clear();
+        killAllNotes();
+        
+        document.getElementById('midi-upload').value = '';
+        document.getElementById('upload-panel').style.display = 'block';
+        document.getElementById('routing-panel').style.display = 'none';
+        document.getElementById('routing-list').innerHTML = '';
+        
+        if(document.getElementById('col-countermelody')) {
+            document.getElementById('col-countermelody').innerHTML = '';
+            document.getElementById('col-accomp-trumpet').innerHTML = '';
+            document.getElementById('col-bass-exp').innerHTML = '';
+            document.getElementById('col-pistons').innerHTML = '';
+        }
+        
+        document.getElementById('tick-slider').value = 0;
+        document.getElementById('tick-slider').disabled = true;
+        document.getElementById('zoom-slider').value = 1;
+        document.getElementById('zoom-slider').disabled = true;
+        updateDisplays(0);
+        
+        const canvas = document.getElementById('piano-roll');
+        if(canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        document.getElementById('log-body').innerHTML = '';
+        
+        songMetadata = {
+            title: "",
+            arranger: "", 
+            version: "1.0",
+            created: getTodayString(),
+            modified: getTodayString(),
+            copyright: "https://nathaniellions.github.io/MIDIMapper166/"
+        };
+        buildMetadataUI();
+        
+        openTab('page-import', document.getElementById('tab-import'));
+    }
+};
+
+document.getElementById('midi-upload').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    fileName = file.name.replace(".mid", ""); const arrayBuffer = await file.arrayBuffer();
+    currentMidi = new Midi(arrayBuffer); ppq = currentMidi.header.ppq || 384; 
+    
+    let systemTrack = getSystemTrack();
+    
+    if (systemTrack) {
+        document.getElementById('import-modal').style.display = 'flex';
+    } else {
+        buildRoutingUI(); 
+    }
+});
+
 window.buildRoutingUI = function() {
     let activeChannels = new Set();
     let channelNames = {};
@@ -824,7 +913,7 @@ window.buildRoutingUI = function() {
         let sel4c = ch === 3 ? 'selected' : '';
         let sel4b = ch === 4 ? 'selected' : '';
         
-        routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+        routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color); margin-bottom: 8px;">
             <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
             <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
                 <option value="1" ${sel1}>Percussion (Out Ch 1)</option>
@@ -946,11 +1035,15 @@ function nudge(amount) {
     if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(newVal); startTimeMs = performance.now(); }
 }
 
+// ==========================================
+// 10. SWITCH LOGIC & RENDER ENGINE
+// ==========================================
 window.handleSwellToggle = function(isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); };
 window.handleStopToggle = function(val, name, manual, isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(81, val, `${name} ON`, manual); else addEvent(80, val, `${name} OFF`, manual); };
 
 function renderLog() {
-    const tbody = document.getElementById('log-body'); tbody.innerHTML = '';
+    const tbody = document.getElementById('log-body'); if(!tbody) return;
+    tbody.innerHTML = '';
     if (!currentMidi) return; let track = getSystemTrack(); if (!track) return;
     let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
     events.sort((a, b) => b.ticks - a.ticks);
@@ -1057,23 +1150,52 @@ function draw() {
     canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr);
     ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#111' : '#1a1a1a';
     ctx.fillRect(0, 0, rect.width, rect.height);
-    const sliderMax = parseInt(document.getElementById('tick-slider').max); const currentTick = parseInt(document.getElementById('tick-slider').value);
-    const zoom = parseFloat(document.getElementById('zoom-slider').value); const windowTicks = sliderMax / zoom;
+    
+    const sliderMax = parseInt(document.getElementById('tick-slider').max); 
+    const currentTick = parseInt(document.getElementById('tick-slider').value);
+    const zoom = parseFloat(document.getElementById('zoom-slider').value); 
+    const windowTicks = sliderMax / zoom;
     let st = Math.max(0, Math.min(sliderMax - windowTicks, currentTick - (windowTicks / 2)));
-    const scaleX = rect.width / windowTicks; const noteHeight = rect.height / (maxMidiNote - minMidiNote + 4);
+    
+    const scaleX = rect.width / windowTicks; 
+    const noteHeight = rect.height / (maxMidiNote - minMidiNote + 4);
+    
     ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-    for(let i = Math.ceil(st / ppq) * ppq; i <= st + windowTicks; i += ppq) { ctx.beginPath(); ctx.moveTo((i - st) * scaleX, 0); ctx.lineTo((i - st) * scaleX, rect.height); ctx.stroke(); }
+    for(let i = Math.ceil(st / ppq) * ppq; i <= st + windowTicks; i += ppq) { 
+        ctx.beginPath(); ctx.moveTo((i - st) * scaleX, 0); ctx.lineTo((i - st) * scaleX, rect.height); ctx.stroke(); 
+    }
+    
     currentMidi.tracks.forEach(t => {
-        if (hiddenChannels.has(t.channel)) return; ctx.fillStyle = channelColors[t.channel % 16];
-        t.notes.forEach(n => { if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); });
+        if (hiddenChannels.has(t.channel)) return; 
+        ctx.fillStyle = channelColors[t.channel % 16];
+        t.notes.forEach(n => { 
+            if (n.ticks + n.durationTicks > st && n.ticks < st + windowTicks) {
+                ctx.fillRect((n.ticks - st) * scaleX, rect.height - ((n.midi - minMidiNote + 2) * noteHeight), Math.max(n.durationTicks * scaleX, 2), Math.max(noteHeight - 1, 3)); 
+            }
+        });
     });
+    
     let trk = getSystemTrack();
     if (trk) {
-        [swellCC, 80, 81].forEach(cc => { if (trk.controlChanges[cc]) trk.controlChanges[cc].forEach(e => { if (e.ticks >= st && e.ticks <= st + windowTicks) { ctx.fillStyle = cc === swellCC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === swellCC ? 16 : 0, 4, 12); } }); });
+        [swellCC, 80, 81].forEach(cc => { 
+            if (trk.controlChanges[cc]) {
+                trk.controlChanges[cc].forEach(e => { 
+                    if (e.ticks >= st && e.ticks <= st + windowTicks) { 
+                        ctx.fillStyle = cc === swellCC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); 
+                        ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === swellCC ? 16 : 0, 4, 12); 
+                    } 
+                }); 
+            }
+        });
     }
-    ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo((currentTick - st) * scaleX, 0); ctx.lineTo((currentTick - st) * scaleX, rect.height); ctx.stroke();
+    
+    ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; 
+    ctx.beginPath(); ctx.moveTo((currentTick - st) * scaleX, 0); ctx.lineTo((currentTick - st) * scaleX, rect.height); ctx.stroke();
 }
 
+// ==========================================
+// 11. EXPORT & INIT
+// ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
     
@@ -1095,17 +1217,15 @@ window.exportMidi = function() {
     const a = document.createElement("a"); 
     a.href = URL.createObjectURL(blob); 
     
-    let safeName = songMetadata.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
     a.download = safeName + "_mapped.mid"; 
     a.click(); 
 };
 
-// ==========================================
-// 5. WINDOW BINDINGS FOR HTML INTERACTION
-// ==========================================
-window.togglePlay = togglePlay;
-window.stopPlayback = stopPlayback;
-window.toggleDarkMode = toggleDarkMode;
-window.toggleMidiVals = toggleMidiVals;
-
-buildSettingsUI(); buildEditorUI(); buildMetadataUI();
+// Start Up
+fetchSoundfont(); 
+createImportModal();
+buildMetadataUI();
+loadPreferences();
+buildSettingsUI();
+buildEditorUI();
