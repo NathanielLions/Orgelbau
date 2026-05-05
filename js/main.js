@@ -12,12 +12,12 @@ let activeOscillators = [];
 
 async function fetchSoundfont() {
     try {
-        document.getElementById('audio-status').innerText = "⏳ Loading Wurlitzer166.sf2...";
+        if(document.getElementById('audio-status')) document.getElementById('audio-status').innerText = "⏳ Loading Wurlitzer166.sf2...";
         const response = await fetch(SOUNDFONT_URL);
         const arrayBuffer = await response.arrayBuffer();
-        document.getElementById('audio-status').innerText = "🔊 Audio Ready";
+        if(document.getElementById('audio-status')) document.getElementById('audio-status').innerText = "🔊 Audio Ready";
     } catch (err) {
-        document.getElementById('audio-status').innerText = "⚠️ Audio Offline";
+        if(document.getElementById('audio-status')) document.getElementById('audio-status').innerText = "⚠️ Audio Offline";
     }
 }
 
@@ -140,7 +140,7 @@ function scheduleNotePlay(note, channel, delaySeconds) {
         
         osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
         
-        let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
+        let swellVal = document.getElementById('swell-switch') && document.getElementById('swell-switch').checked ? 1.0 : 0.4;
         let peakVolume = 0.08 * swellVal;
         
         gain.gain.setValueAtTime(0, playTime);
@@ -240,7 +240,7 @@ window.nudgeTicks = function(amount) { nudge(amount); };
 window.nudgeBeats = function(amount) { nudge(amount * ppq); };
 
 window.nudgeSeconds = function(amountSec) {
-    if (!currentMidi || document.getElementById('tick-slider').disabled) return;
+    if (!currentMidi || !document.getElementById('tick-slider') || document.getElementById('tick-slider').disabled) return;
     let currentTick = parseInt(document.getElementById('tick-slider').value);
     let currentSec = currentMidi.header.ticksToSeconds(currentTick);
     let targetSec = Math.max(0, currentSec + amountSec);
@@ -565,14 +565,14 @@ window.updateMapping = function(manualKey, index, type, newVal) {
     if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
     if (type === 'name') organStructure[manualKey][index].name = newVal;
     buildSettingsUI(); buildEditorUI();
-    if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
+    if(currentMidi && document.getElementById('tick-slider')) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 };
 
 window.updateExpMapping = function(type, newVal) {
     if (type === 'swell') swellCC = parseInt(newVal);
     if (type === 'perc') percCC = parseInt(newVal);
     buildSettingsUI(); buildEditorUI();
-    if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
+    if(currentMidi && document.getElementById('tick-slider')) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
 };
 
 // ==========================================
@@ -837,10 +837,10 @@ window.hardReset = function() {
         scheduledNotes.clear();
         killAllNotes();
         
-        document.getElementById('midi-upload').value = '';
-        document.getElementById('upload-panel').style.display = 'block';
-        document.getElementById('routing-panel').style.display = 'none';
-        document.getElementById('routing-list').innerHTML = '';
+        if(document.getElementById('midi-upload')) document.getElementById('midi-upload').value = '';
+        if(document.getElementById('upload-panel')) document.getElementById('upload-panel').style.display = 'block';
+        if(document.getElementById('routing-panel')) document.getElementById('routing-panel').style.display = 'none';
+        if(document.getElementById('routing-list')) document.getElementById('routing-list').innerHTML = '';
         
         if(document.getElementById('col-countermelody')) {
             document.getElementById('col-countermelody').innerHTML = '';
@@ -849,10 +849,15 @@ window.hardReset = function() {
             document.getElementById('col-pistons').innerHTML = '';
         }
         
-        document.getElementById('tick-slider').value = 0;
-        document.getElementById('tick-slider').disabled = true;
-        document.getElementById('zoom-slider').value = 1;
-        document.getElementById('zoom-slider').disabled = true;
+        if(document.getElementById('tick-slider')) {
+            document.getElementById('tick-slider').value = 0;
+            document.getElementById('tick-slider').disabled = true;
+        }
+        if(document.getElementById('zoom-slider')) {
+            document.getElementById('zoom-slider').value = 1;
+            document.getElementById('zoom-slider').disabled = true;
+        }
+        
         updateDisplays(0);
         
         const canvas = document.getElementById('piano-roll');
@@ -861,7 +866,9 @@ window.hardReset = function() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
         
-        document.getElementById('log-body').innerHTML = '';
+        if(document.getElementById('log-body')) {
+            document.getElementById('log-body').innerHTML = '';
+        }
         
         songMetadata = {
             title: "",
@@ -926,9 +933,9 @@ window.buildRoutingUI = function() {
         </div>`;
     });
 
-    document.getElementById('routing-list').innerHTML = routingHtml;
-    document.getElementById('upload-panel').style.display = 'none';
-    document.getElementById('routing-panel').style.display = 'block';
+    if(document.getElementById('routing-list')) document.getElementById('routing-list').innerHTML = routingHtml;
+    if(document.getElementById('upload-panel')) document.getElementById('upload-panel').style.display = 'none';
+    if(document.getElementById('routing-panel')) document.getElementById('routing-panel').style.display = 'block';
 };
 
 window.applyRoutingAndStart = function() {
@@ -998,18 +1005,23 @@ function finalizeImport() {
     });
     
     const filtersDiv = document.getElementById('channel-filters');
-    filtersDiv.innerHTML = '<strong style="display:flex; align-items:center; margin-right:10px; font-size:0.9em;">Tracks:</strong>';
-    Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
-        const btn = document.createElement('button'); btn.className = 'filter-btn'; btn.style.backgroundColor = channelColors[ch % 16]; btn.innerText = `Ch ${ch + 1}`; 
-        btn.onclick = () => { if (hiddenChannels.has(ch)) { hiddenChannels.delete(ch); btn.classList.remove('inactive'); } else { hiddenChannels.add(ch); btn.classList.add('inactive'); } draw(); };
-        filtersDiv.appendChild(btn);
-    });
+    if(filtersDiv) {
+        filtersDiv.innerHTML = '<strong style="display:flex; align-items:center; margin-right:10px; font-size:0.9em;">Tracks:</strong>';
+        Array.from(activeChannels).sort((a,b)=>a-b).forEach(ch => {
+            const btn = document.createElement('button'); btn.className = 'filter-btn'; btn.style.backgroundColor = channelColors[ch % 16]; btn.innerText = `Ch ${ch + 1}`; 
+            btn.onclick = () => { if (hiddenChannels.has(ch)) { hiddenChannels.delete(ch); btn.classList.remove('inactive'); } else { hiddenChannels.add(ch); btn.classList.add('inactive'); } draw(); };
+            filtersDiv.appendChild(btn);
+        });
+    }
     
-    const slider = document.getElementById('tick-slider'); slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
-    document.getElementById('zoom-slider').disabled = false; 
+    const slider = document.getElementById('tick-slider'); 
+    if(slider) {
+        slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
+    }
+    if(document.getElementById('zoom-slider')) document.getElementById('zoom-slider').disabled = false; 
     
     updateDisplays(0);
-    document.getElementById('export-btn').style.display = 'block'; 
+    if(document.getElementById('export-btn')) document.getElementById('export-btn').style.display = 'block'; 
     renderLog(); 
     syncSwitchesToTimeline(0); 
     openTab('page-editor', document.getElementById('tab-editor'));
@@ -1017,17 +1029,24 @@ function finalizeImport() {
 
 window.addEventListener('resize', () => { if (currentMidi) draw(); });
 
-document.getElementById('tick-slider').addEventListener('input', (e) => {
-    const newTick = parseInt(e.target.value); 
-    updateDisplays(newTick);
-    syncSwitchesToTimeline(newTick); draw();
-    if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(newTick); startTimeMs = performance.now(); }
-});
+if(document.getElementById('tick-slider')) {
+    document.getElementById('tick-slider').addEventListener('input', (e) => {
+        const newTick = parseInt(e.target.value); 
+        updateDisplays(newTick);
+        syncSwitchesToTimeline(newTick); draw();
+        if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(newTick); startTimeMs = performance.now(); }
+    });
+}
 
-document.getElementById('zoom-slider').addEventListener('input', (e) => { document.getElementById('zoom-level').innerText = e.target.value + 'x'; draw(); });
+if(document.getElementById('zoom-slider')) {
+    document.getElementById('zoom-slider').addEventListener('input', (e) => { 
+        if(document.getElementById('zoom-level')) document.getElementById('zoom-level').innerText = e.target.value + 'x'; 
+        draw(); 
+    });
+}
 
 function nudge(amount) {
-    const slider = document.getElementById('tick-slider'); if (slider.disabled) return;
+    const slider = document.getElementById('tick-slider'); if (!slider || slider.disabled) return;
     let newVal = Math.max(0, Math.min(parseInt(slider.max), parseInt(slider.value) + amount));
     slider.value = newVal; 
     updateDisplays(newVal);
@@ -1145,7 +1164,7 @@ function syncSwitchesToTimeline(currentTick) {
 
 function draw() {
     if (!currentMidi) return;
-    const canvas = document.getElementById('piano-roll'); if (canvas.offsetParent === null) return; 
+    const canvas = document.getElementById('piano-roll'); if (!canvas || canvas.offsetParent === null) return; 
     const ctx = canvas.getContext('2d'); const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; ctx.scale(dpr, dpr);
     ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#111' : '#1a1a1a';
