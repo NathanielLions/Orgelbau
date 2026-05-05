@@ -1252,7 +1252,7 @@ window.exportMidi = function() {
     // 1. Instantiate a completely pure, empty MIDI file
     const cleanExport = new Midi();
     cleanExport.header.name = (songMetadata.title || "W166_Export").replace(/[^a-z0-9\s]/gi, '').trim();
-    cleanExport.header.ppq = currentMidi.header.ppq || 384;
+    // (PPQ assignment removed to prevent read-only getter crash)
 
     // 2. Loop through live tracks and safely clone data, skipping empty tracks
     currentMidi.tracks.forEach(oldTrack => {
@@ -1268,27 +1268,41 @@ window.exportMidi = function() {
             newTrack.name = oldTrack.name.substring(0, 32); 
         }
 
-        // Clone Notes
+        // Clone Notes using absolute time (seconds) to bypass PPQ math
         oldTrack.notes.forEach(n => {
             newTrack.addNote({
                 midi: n.midi,
-                ticks: n.ticks,
-                durationTicks: n.durationTicks,
+                time: n.time,
+                duration: n.duration,
                 velocity: n.velocity
             });
         });
 
-        // Clone Control Changes
+        // Clone Control Changes using absolute time (seconds)
         for (let ccNum in oldTrack.controlChanges) {
             oldTrack.controlChanges[ccNum].forEach(cc => {
                 newTrack.addCC({
                     number: cc.number,
-                    ticks: cc.ticks,
+                    time: cc.time,
                     value: cc.value
                 });
             });
         }
     });
+
+    // 3. Export binary
+    try {
+        const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
+        const a = document.createElement("a"); 
+        a.href = URL.createObjectURL(blob); 
+        
+        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = safeName + "_mapped.mid"; 
+        a.click(); 
+    } catch (e) {
+        alert("Export Encoding Error: " + e.message);
+    }
+};
 
     // 3. Export binary
     try {
