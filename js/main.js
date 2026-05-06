@@ -1273,9 +1273,15 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    let sysTrack = getOrCreateSystemTrack();
-    sysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
-    sysTrack.channel = 15; 
+    // CRITICAL FIX: Do NOT use getOrCreateSystemTrack() here. 
+    // It might hijack a music track if the original file had mixed CCs.
+    // We explicitly isolate/create the Channel 16 hardware track.
+    let exportSysTrack = currentMidi.tracks.find(t => t.channel === 15);
+    if (!exportSysTrack) {
+        exportSysTrack = currentMidi.addTrack();
+        exportSysTrack.channel = 15; 
+    }
+    exportSysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
     
     let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
     currentMidi.header.name = safeName.substring(0, 32);
@@ -1287,29 +1293,32 @@ window.exportMidi = function() {
     currentMidi.tracks.forEach(t => {
         t.channel = parseInt(t.channel) || 0;
 
+        // Trash DAW junk
         [1, 7, 10, 91, 121].forEach(cc => { if (t.controlChanges[cc]) delete t.controlChanges[cc]; });
 
-        if (t === sysTrack || t.channel === 15) {
-            t.notes = []; 
-            
-            [SWELL_CC, 80, 81].forEach(ccNum => {
-                if (t.controlChanges[ccNum]) {
-                    t.controlChanges[ccNum].forEach(e => {
-                        let rawVal = Math.round(e.value);
-                        if (rawVal < 0) rawVal = 0;
-                        if (rawVal > 127) rawVal = 127;
-                        allSystemEvents.push({ cc: ccNum, val: rawVal, ticks: e.ticks });
-                    });
-                }
-            });
-            t.controlChanges[SWELL_CC] = [];
-            t.controlChanges[80] = [];
-            t.controlChanges[81] = [];
-        } else {
-            if (t.controlChanges[SWELL_CC]) delete t.controlChanges[SWELL_CC];
-            if (t.controlChanges[80]) delete t.controlChanges[80];
-            if (t.controlChanges[81]) delete t.controlChanges[81];
+        // Collect ALL system CCs from EVERY track so they can be securely merged to Channel 16
+        [SWELL_CC, 80, 81].forEach(ccNum => {
+            if (t.controlChanges[ccNum]) {
+                t.controlChanges[ccNum].forEach(e => {
+                    let rawVal = Math.round(e.value);
+                    if (rawVal < 0) rawVal = 0;
+                    if (rawVal > 127) rawVal = 127;
+                    allSystemEvents.push({ cc: ccNum, val: rawVal, ticks: e.ticks });
+                });
+            }
+        });
 
+        // Wipe system events from this track (they are safely in the array now)
+        if (t.controlChanges[SWELL_CC]) delete t.controlChanges[SWELL_CC];
+        if (t.controlChanges[80]) delete t.controlChanges[80];
+        if (t.controlChanges[81]) delete t.controlChanges[81];
+
+        // Format notes and channels
+        if (t === exportSysTrack || t.channel === 15) {
+            // ONLY wipe notes if this is the explicitly isolated hardware Channel 16
+            t.notes = []; 
+        } else {
+            // PRESERVE ALL MUSIC NOTES
             t.notes.sort((a, b) => a.ticks - b.ticks);
             t.notes.forEach(n => n.channel = t.channel);
             
@@ -1356,19 +1365,21 @@ window.exportMidi = function() {
 
     // PASS 3: REBUILD SINGLE SOURCE OF TRUTH
     cleanSystemEvents.forEach(e => {
-        sysTrack.addCC({ number: e.cc, value: e.val, ticks: e.ticks });
+        exportSysTrack.addCC({ number: e.cc, value: e.val, ticks: e.ticks });
     });
     
-    Object.values(sysTrack.controlChanges).flat().forEach(cc => cc.channel = 15);
+    if (exportSysTrack.controlChanges) {
+        Object.values(exportSysTrack.controlChanges).flat().forEach(cc => cc.channel = 15);
+    }
 
     // PASS 4: PRE-FLIGHT VALIDATION CHECK
     let isExportValid = true;
     let validationLog = [];
 
     let sysEventsForValidation = [];
-    if (sysTrack) {
-        for (let ccNum in sysTrack.controlChanges) {
-            sysTrack.controlChanges[ccNum].forEach(cc => {
+    if (exportSysTrack) {
+        for (let ccNum in exportSysTrack.controlChanges) {
+            exportSysTrack.controlChanges[ccNum].forEach(cc => {
                 sysEventsForValidation.push({ cc: parseInt(ccNum), val: cc.value, ticks: cc.ticks });
             });
         }
@@ -1412,12 +1423,12 @@ window.exportMidi = function() {
                             (t.controlChanges[80] && t.controlChanges[80].length > 0) || 
                             (t.controlChanges[81] && t.controlChanges[81].length > 0);
                             
-        if (t !== sysTrack && hasSystemData) {
+        if (t !== exportSysTrack && hasSystemData) {
             isExportValid = false;
             validationLog.push(`Track ${t.channel + 1} contains illegal System CCs.`);
         }
 
-        if (t !== sysTrack) {
+        if (t !== exportSysTrack) {
             for (let ccNum in t.controlChanges) {
                 t.controlChanges[ccNum].forEach(cc => {
                     if (cc.value < 0 || cc.value > 127 || !Number.isInteger(cc.value)) {
