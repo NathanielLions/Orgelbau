@@ -268,7 +268,7 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-const DEFAULT_SWELL_CC = 4;
+const DEFAULT_SWELL_CC = 11; // CRITICAL FIX: Expression mapped strictly to CC 11
 const DEFAULT_PERC_CC = 12;
 
 const DEFAULT_ORGAN_STRUCTURE = {
@@ -398,7 +398,7 @@ window.toggleMidiVals = function(show) {
 function getSystemTrack() {
     if (!currentMidi) return null;
     return currentMidi.tracks.find(t => 
-        t.channel === 15 || 
+        t.channel === 15 || // Hardware Channel 16
         (t.controlChanges[80] && t.controlChanges[80].length > 0) || 
         (t.controlChanges[81] && t.controlChanges[81].length > 0)
     );
@@ -408,7 +408,7 @@ function getOrCreateSystemTrack() {
     let trk = getSystemTrack();
     if (!trk) {
         trk = currentMidi.addTrack();
-        trk.channel = 15;
+        trk.channel = 15; // Hardware Channel 16
     }
     trk.channel = 15; 
     return trk;
@@ -632,7 +632,7 @@ function getUnknownStops(track) {
     [80, 81].forEach(cc => {
         if (track.controlChanges[cc]) {
             track.controlChanges[cc].forEach(e => {
-                let val = Math.round(e.value * 127);
+                let val = Math.round(e.value); // CRITICAL FIX: Direct integer cast, no normalization
                 if (!knownVals.includes(val)) foundVals.add(val);
             });
         }
@@ -761,7 +761,7 @@ window.processRemap = function(unknowns) {
                     if(sysTrack.controlChanges[cc]) {
                         let arr = sysTrack.controlChanges[cc];
                         for(let i = arr.length - 1; i >= 0; i--) {
-                            if (Math.round(arr[i].value * 127) === val) arr.splice(i, 1);
+                            if (Math.round(arr[i].value) === val) arr.splice(i, 1);
                         }
                     }
                 });
@@ -823,7 +823,7 @@ window.deleteAllRemap = function(unknowns) {
                 if(sysTrack.controlChanges[cc]) {
                     let arr = sysTrack.controlChanges[cc];
                     for (let i = arr.length - 1; i >= 0; i--) {
-                        if (Math.round(arr[i].value * 127) === val) arr.splice(i, 1);
+                        if (Math.round(arr[i].value) === val) arr.splice(i, 1);
                     }
                 }
             });
@@ -1065,14 +1065,31 @@ function nudge(amount) {
 // ==========================================
 // 10. SWITCH LOGIC & RENDER ENGINE
 // ==========================================
-window.handleSwellToggle = function(isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); };
-window.handleStopToggle = function(val, name, manual, isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(81, val, `${name} ON`, manual); else addEvent(80, val, `${name} OFF`, manual); };
+window.handleSwellToggle = function(isChecked) { 
+    if (isUpdatingSwitches) return; 
+    // CRITICAL FIX: Direct int passing to addEvent
+    if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); 
+    else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); 
+};
+
+window.handleStopToggle = function(val, name, manual, isChecked) { 
+    if (isUpdatingSwitches) return; 
+    // CRITICAL FIX: Direct int passing for CC 80/81
+    if (isChecked) addEvent(81, val, `${name} ON`, manual); 
+    else addEvent(80, val, `${name} OFF`, manual); 
+};
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); if(!tbody) return;
     tbody.innerHTML = '';
     if (!currentMidi) return; let track = getSystemTrack(); if (!track) return;
-    let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
+    let events = []; 
+    [swellCC, 80, 81].forEach(cc => { 
+        if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { 
+            // CRITICAL FIX: Raw int retrieval
+            events.push({ cc: cc, val: Math.round(e.value), ticks: e.ticks }); 
+        }); 
+    });
     events.sort((a, b) => b.ticks - a.ticks);
     events.forEach(e => {
         let label = ""; let manual = "Sys"; let labelColor = "var(--text-color)";
@@ -1111,7 +1128,7 @@ window.applyRegistrationState = function(pistonIndex) {
     
     if (p.swellState !== 0) {
         let swellVal = p.swellState === 1 ? 127 : 64;
-        track.addCC({ number: swellCC, value: swellVal / 127, ticks: baseTick + currentOffset });
+        track.addCC({ number: swellCC, value: swellVal, ticks: baseTick + currentOffset }); // CRITICAL FIX: raw values
         currentOffset++;
     }
     
@@ -1123,7 +1140,7 @@ window.applyRegistrationState = function(pistonIndex) {
         else if (p.offStops.includes(val)) targetCC = 80;
         
         if (targetCC !== null) {
-            track.addCC({ number: targetCC, value: val / 127, ticks: baseTick + currentOffset });
+            track.addCC({ number: targetCC, value: val, ticks: baseTick + currentOffset }); // CRITICAL FIX: raw values
             currentOffset++;
         }
     });
@@ -1145,7 +1162,8 @@ function addEvent(cc, val, label, manual) {
             let arr = track.controlChanges[checkCc];
             for(let i = arr.length - 1; i >= 0; i--) {
                 let e = arr[i];
-                let isConflict = ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val));
+                // CRITICAL FIX: Raw int check for inverse conflicts at same tick
+                let isConflict = ((cc === swellCC && checkCc === swellCC) || ((cc === 80 || cc === 81) && (checkCc === 80 || checkCc === 81) && Math.round(e.value) === val));
                 if (isConflict && Math.abs(e.ticks - baseTick) <= 10) arr.splice(i, 1);
             }
         }
@@ -1154,7 +1172,7 @@ function addEvent(cc, val, label, manual) {
     let safeTick = baseTick; 
     while (track.controlChanges[cc] && track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
     
-    track.addCC({ number: cc, value: val / 127, ticks: safeTick });
+    track.addCC({ number: cc, value: val, ticks: safeTick }); // CRITICAL FIX: raw values
     renderLog(); draw(); 
 }
 
@@ -1163,7 +1181,8 @@ window.removeEvent = function(cc, val, tick) {
     if (track && track.controlChanges[cc]) {
         let arr = track.controlChanges[cc];
         for (let i = arr.length - 1; i >= 0; i--) {
-            if (arr[i].ticks === tick && Math.round(arr[i].value * 127) === val) {
+            // CRITICAL FIX: Raw int check
+            if (arr[i].ticks === tick && Math.round(arr[i].value) === val) {
                 arr.splice(i, 1);
             }
         }
@@ -1177,7 +1196,12 @@ function syncSwitchesToTimeline(currentTick) {
     let track = getSystemTrack();
     let stopStates = {}; let swellState = false; 
     if (track) {
-        let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
+        let events = []; 
+        [swellCC, 80, 81].forEach(cc => { 
+            if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { 
+                if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value), ticks: e.ticks }); 
+            }); 
+        });
         events.sort((a, b) => a.ticks - b.ticks).forEach(e => { if (e.cc === 81) stopStates[e.val] = true; if (e.cc === 80) stopStates[e.val] = false; if (e.cc === swellCC) swellState = (e.val >= 127); });
     }
     Object.values(organStructure).flat().forEach(s => { 
@@ -1241,39 +1265,90 @@ function draw() {
 }
 
 // ==========================================
-// 11. EXPORT & INIT
+// 11. THE STRICT EXPORT ENGINE
 // ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
     
-    // FINAL METADATA INJECTION
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
     let sysTrack = getOrCreateSystemTrack();
     sysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
-    currentMidi.header.name = songMetadata.title;
-    currentMidi.name = songMetadata.title;
-    
-    currentMidi.tracks.forEach(t => {
-        // THE CRITICAL FIX: Sort chronologically to prevent DAW time errors
-        t.notes.sort((a, b) => a.ticks - b.ticks);
-        for (let ccNum in t.controlChanges) {
-            t.controlChanges[ccNum].sort((a, b) => a.ticks - b.ticks);
-        }
-
-        t.notes.forEach(n => n.channel = t.channel);
-        Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
-    });
-
-    const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
-    const a = document.createElement("a"); 
-    a.href = URL.createObjectURL(blob); 
     
     let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
-    let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    a.download = safeFilename + "_mapped.mid"; 
-    a.click(); 
+    currentMidi.header.name = safeName.substring(0, 32);
+    currentMidi.name = safeName.substring(0, 32);
+    
+    const blockedCCs = [1, 7, 10, 91, 121]; 
+
+    currentMidi.tracks.forEach(t => {
+        t.channel = parseInt(t.channel) || 0;
+
+        // Trash DAW junk
+        blockedCCs.forEach(cc => {
+            if (t.controlChanges[cc]) {
+                delete t.controlChanges[cc];
+            }
+        });
+
+        // CRITICAL RULE 1 & 4: Strict Channel Separation Enforcement
+        if (t.channel === 15) {
+            // System track (Channel 16): STRIP ALL NOTES
+            t.notes = [];
+        } else {
+            // Note tracks (Channels 1-15): STRIP ALL SYSTEM CONTROLS
+            if (t.controlChanges[80]) delete t.controlChanges[80];
+            if (t.controlChanges[81]) delete t.controlChanges[81];
+            if (t.controlChanges[11]) delete t.controlChanges[11]; // Strip Expression from note channels
+        }
+
+        // CRITICAL RULE 6: Sort chronologically so delta-time never goes negative
+        t.notes.sort((a, b) => a.ticks - b.ticks);
+        
+        for (let ccNum in t.controlChanges) {
+            let ccEvents = t.controlChanges[ccNum];
+            ccEvents.sort((a, b) => a.ticks - b.ticks);
+            
+            // CRITICAL RULE 6: Remove conflicting duplicates at exact same tick
+            let deduped = [];
+            for (let i = 0; i < ccEvents.length; i++) {
+                let current = ccEvents[i];
+                let isDuplicate = false;
+                
+                if (deduped.length > 0) {
+                    let prev = deduped[deduped.length - 1];
+                    // If a CC event has the EXACT same tick and exact same integer value as the previous one, drop it
+                    if (prev.ticks === current.ticks && Math.round(prev.value) === Math.round(current.value)) {
+                        isDuplicate = true;
+                    }
+                }
+                
+                if (!isDuplicate) {
+                    deduped.push(current);
+                }
+            }
+            t.controlChanges[ccNum] = deduped;
+        }
+
+        // CHANNEL SYNC
+        t.notes.forEach(n => n.channel = t.channel);
+        if (Object.keys(t.controlChanges).length > 0) {
+            Object.values(t.controlChanges).flat().forEach(cc => cc.channel = t.channel);
+        }
+    });
+
+    try {
+        const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+        const a = document.createElement("a"); 
+        a.href = URL.createObjectURL(blob); 
+        
+        let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = safeFilename + "_mapped.mid"; 
+        a.click(); 
+    } catch (e) {
+        alert("Export Encoding Error: " + e.message);
+    }
 };
 
 // Start Up
