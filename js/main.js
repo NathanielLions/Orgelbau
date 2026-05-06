@@ -1262,16 +1262,21 @@ window.exportMidi = function() {
             track.name = safeName.substring(0, 32);
         }
 
+        // Trash the DAW junk
         blockedCCs.forEach(cc => {
             if (track.controlChanges[cc]) {
                 delete track.controlChanges[cc];
             }
         });
 
+        // Sort notes AND force them to inherit the track's channel
         track.notes.sort((a, b) => a.ticks - b.ticks);
+        track.notes.forEach(n => n.channel = track.channel);
         
+        // Sort CCs AND force them to inherit the track's channel (CRITICAL FOR SWELL/STOPS)
         for (let ccNum in track.controlChanges) {
             track.controlChanges[ccNum].sort((a, b) => a.ticks - b.ticks);
+            track.controlChanges[ccNum].forEach(cc => cc.channel = track.channel);
         }
     });
 
