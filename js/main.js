@@ -1241,7 +1241,7 @@ function draw() {
 }
 
 // ==========================================
-// 11. EXPORT ENGINE (REVERTED & SORT-FIXED)
+// 11. THE TICK-BASED CLONE ENGINE
 // ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
@@ -1249,44 +1249,66 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
-    currentMidi.header.name = safeName.substring(0, 32);
-    currentMidi.name = safeName.substring(0, 32);
+    // 1. Create a pure, empty MIDI file
+    const cleanExport = new Midi();
+    cleanExport.header.name = (songMetadata.title || "W166_Export").replace(/[^a-z0-9\s]/gi, '').trim().substring(0, 32);
+    
+    // CRITICAL FIX #1: Steal the exact PPQ from the old file so integer math never breaks
+    cleanExport.header.ppq = currentMidi.header.ppq || ppq;
 
+    // 2. The Blocklist to protect the hardware
     const blockedCCs = [1, 7, 10, 91, 121]; 
 
-    currentMidi.tracks.forEach(track => {
-        track.channel = parseInt(track.channel) || 0;
+    // 3. Clone tracks safely
+    currentMidi.tracks.forEach(oldTrack => {
+        const hasNotes = oldTrack.notes.length > 0;
+        const hasCCs = Object.keys(oldTrack.controlChanges).some(ccNum => !blockedCCs.includes(parseInt(ccNum)));
         
-        if (track.name && track.name.startsWith("W166_META")) {
-            track.name = safeName.substring(0, 32);
+        if (!hasNotes && !hasCCs) return;
+
+        const newTrack = cleanExport.addTrack();
+        
+        // CRITICAL FIX #2: All new events added to this track will permanently inherit this channel byte
+        newTrack.channel = parseInt(oldTrack.channel) || 0;
+        
+        if (oldTrack.name && !oldTrack.name.startsWith("W166_META")) {
+            newTrack.name = oldTrack.name.substring(0, 32); 
         }
 
-        // Trash the DAW junk
-        blockedCCs.forEach(cc => {
-            if (track.controlChanges[cc]) {
-                delete track.controlChanges[cc];
-            }
+        // CRITICAL FIX #3: Clone using raw integer 'ticks', sorted chronologically
+        let sortedNotes = [...oldTrack.notes].sort((a,b) => a.ticks - b.ticks);
+        sortedNotes.forEach(n => {
+            newTrack.addNote({
+                midi: n.midi,
+                ticks: n.ticks,
+                durationTicks: n.durationTicks,
+                velocity: n.velocity
+            });
         });
 
-        // Sort notes AND force them to inherit the track's channel
-        track.notes.sort((a, b) => a.ticks - b.ticks);
-        track.notes.forEach(n => n.channel = track.channel);
-        
-        // Sort CCs AND force them to inherit the track's channel (CRITICAL FOR SWELL/STOPS)
-        for (let ccNum in track.controlChanges) {
-            track.controlChanges[ccNum].sort((a, b) => a.ticks - b.ticks);
-            track.controlChanges[ccNum].forEach(cc => cc.channel = track.channel);
+        // Clone CCs using raw integer 'ticks'
+        for (let ccNum in oldTrack.controlChanges) {
+            if (blockedCCs.includes(parseInt(ccNum))) continue;
+            
+            let sortedCCs = [...oldTrack.controlChanges[ccNum]].sort((a,b) => a.ticks - b.ticks);
+            sortedCCs.forEach(cc => {
+                newTrack.addCC({
+                    number: cc.number,
+                    ticks: cc.ticks,
+                    value: cc.value
+                });
+            });
         }
     });
 
+    // 4. Export
     try {
-        const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
+        const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
         const a = document.createElement("a"); 
         a.href = URL.createObjectURL(blob); 
         
-        let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = safeFilename + "_mapped.mid"; 
+        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = safeName + "_mapped.mid"; 
         a.click(); 
     } catch (e) {
         alert("Export Encoding Error: " + e.message);
