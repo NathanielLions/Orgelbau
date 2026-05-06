@@ -49,7 +49,7 @@ function stopPlayback() {
     isPlaying = false;
     document.getElementById('play-btn').innerText = "▶ Play";
     document.getElementById('tick-slider').value = 0;
-    document.getElementById('current-tick').innerText = '0';
+    updateDisplays(0);
     syncSwitchesToTimeline(0);
     draw();
     killAllNotes();
@@ -74,7 +74,7 @@ function scheduler() {
     if (newTick > sliderMax) { stopPlayback(); return; }
     
     document.getElementById('tick-slider').value = newTick;
-    document.getElementById('current-tick').innerText = newTick;
+    updateDisplays(newTick);
     syncSwitchesToTimeline(newTick);
     draw();
     
@@ -160,7 +160,59 @@ function scheduleNotePlay(note, channel, delaySeconds) {
 }
 
 // ==========================================
-// 2. CORE EDITOR LOGIC & STATE
+// TIME & DISPLAY ENGINE
+// ==========================================
+let timeDisplayFormat = 'ticks'; 
+
+window.updateTimeFormat = function(format) {
+    timeDisplayFormat = format;
+    let lbl = "Tick";
+    if (format === 'time') lbl = "Time";
+    if (format === 'measures') lbl = "Meas";
+    
+    document.getElementById('time-label').innerText = lbl;
+    document.getElementById('log-time-header').innerText = lbl;
+    
+    let currentTick = parseInt(document.getElementById('tick-slider').value) || 0;
+    updateDisplays(currentTick);
+    renderLog(); 
+};
+
+function formatTimeDisplay(ticks) {
+    if (!currentMidi) return ticks;
+    if (timeDisplayFormat === 'time') {
+        let sec = currentMidi.header.ticksToSeconds(ticks);
+        let mins = Math.floor(sec / 60);
+        let remSec = (sec % 60).toFixed(2);
+        return `${mins}:${remSec.padStart(5, '0')}`;
+    } else if (timeDisplayFormat === 'measures') {
+        let bar = Math.floor(ticks / (ppq * 4)) + 1;
+        let beat = Math.floor((ticks % (ppq * 4)) / ppq) + 1;
+        let t = Math.round(ticks % ppq);
+        return `${bar}:${beat}:${t.toString().padStart(3, '0')}`;
+    }
+    return ticks;
+}
+
+function updateDisplays(tickValue) {
+    document.getElementById('current-tick').innerText = formatTimeDisplay(tickValue);
+}
+
+window.nudgeTicks = function(amount) { nudge(amount); };
+window.nudgeBeats = function(amount) { nudge(amount * ppq); };
+
+window.nudgeSeconds = function(amountSec) {
+    if (!currentMidi || document.getElementById('tick-slider').disabled) return;
+    let currentTick = parseInt(document.getElementById('tick-slider').value);
+    let currentSec = currentMidi.header.ticksToSeconds(currentTick);
+    let targetSec = Math.max(0, currentSec + amountSec);
+    let targetTick = Math.round(currentMidi.header.secondsToTicks(targetSec));
+    let diff = targetTick - currentTick;
+    nudge(diff);
+};
+
+// ==========================================
+// 2. CORE EDITOR LOGIC & STATE (WITH DEFAULTS)
 // ==========================================
 let currentMidi = null;
 let fileName = "wurlitzer_output";
@@ -170,10 +222,6 @@ let maxMidiNote = 0;
 let isUpdatingSwitches = false; 
 
 let hiddenChannels = new Set();
-window.pistonsAffectPercussion = false;
-
-let swellCC = 4;
-let percCC = 12;
 
 const channelColors = [
     '#e74c3c', '#2ecc71', '#f1c40f', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#34495e',
@@ -182,7 +230,11 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-let organStructure = {
+// DEFAULT FACTORY SETTINGS
+const DEFAULT_SWELL_CC = 4;
+const DEFAULT_PERC_CC = 12;
+
+const DEFAULT_ORGAN_STRUCTURE = {
     "Countermelody (Ch 2)": [ 
         { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
         { val: 20, name: "Undamaris", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
@@ -200,16 +252,21 @@ let organStructure = {
     ]
 };
 
-// 3-State Piston System
-let pistons = [
-    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 58], swell: 64 }, // Softest foundations
-    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, // Full organ
+const DEFAULT_PISTONS = [
+    { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58], swell: 64 }, 
+    { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
     { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58], swell: 127 }, 
     { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58], swell: 127 },
     { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58], swell: 127 }, 
     { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
+
+// LIVE STATE VARIABLES
+let swellCC = DEFAULT_SWELL_CC;
+let percCC = DEFAULT_PERC_CC;
+let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
+let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
 
 function updateGlobalStopList() {
     let newAllStops = Object.values(organStructure).flat().map(s => s.val).concat([percCC]);
@@ -224,6 +281,28 @@ function updateGlobalStopList() {
 updateGlobalStopList();
 
 let editingPistonIndex = 0;
+
+window.resetToDefaults = function() {
+    if (confirm("⚠️ Are you sure you want to restore the default Wurlitzer 166 settings? \n\nThis will erase any custom stops, remappings, and piston modifications you have made!")) {
+        swellCC = DEFAULT_SWELL_CC;
+        percCC = DEFAULT_PERC_CC;
+        organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
+        pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
+        editingPistonIndex = 0;
+        
+        updateGlobalStopList();
+        buildSettingsUI();
+        buildEditorUI();
+        
+        if (currentMidi) {
+            let currentTick = parseInt(document.getElementById('tick-slider').value);
+            syncSwitchesToTimeline(currentTick);
+            renderLog();
+            draw();
+        }
+        alert("Success: Factory settings have been restored.");
+    }
+};
 
 function toggleDarkMode(isDark) {
     if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
@@ -260,7 +339,7 @@ function getOrCreateSystemTrack() {
 // ==========================================
 // DYNAMIC RANK ADD/REMOVE LOGIC
 // ==========================================
-function addRank(manualKey) {
+window.addRank = function(manualKey) {
     let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
     let newVal = 21; 
     while (usedCCs.includes(newVal) && newVal < 120) { newVal++; }
@@ -269,16 +348,16 @@ function addRank(manualKey) {
     updateGlobalStopList();
     buildSettingsUI();
     buildEditorUI();
-}
+};
 
-function deleteRank(manualKey, index) {
+window.deleteRank = function(manualKey, index) {
     if (confirm(`Are you sure you want to delete ${organStructure[manualKey][index].name}?`)) {
         organStructure[manualKey].splice(index, 1);
         updateGlobalStopList();
         buildSettingsUI();
         buildEditorUI();
     }
-}
+};
 
 // ==========================================
 // NEW VISIBILITY & UI ENGINE (SETTINGS)
@@ -302,7 +381,7 @@ function buildSettingsUI() {
             let rowOp = isVis ? "1" : "0.6";
 
             globalHtml += `<div style="display:flex; align-items:center; gap: 5px; margin-bottom: 5px; opacity: ${rowOp};">
-                <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:0.6; padding:0; margin-right: 5px; transition: 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#e74c3c';" onmouseout="this.style.opacity='0.6'; this.style.color='inherit';" onclick="deleteRank('${manual}', ${i})" title="Delete Stop">🗑️</button>
+                <button style="background:#e74c3c; border:none; border-radius: 3px; cursor:pointer; font-size:0.7em; color: white; padding:2px 5px; margin-right: 5px;" onclick="deleteRank('${manual}', ${i})" title="Delete Stop">🗑️</button>
                 <button style="background:transparent; border:none; cursor:pointer; font-size:1em; opacity:${eyeOp}; padding:0;" onclick="toggleRankVisibility('${manual}', ${i})" title="Toggle Visibility">👁️</button>
                 <input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${s.val}" onchange="updateMapping('${manual}', ${i}, 'val', this.value)" title="MIDI CC">
                 <input type="text" style="background:transparent; border:none; border-bottom:1px dashed var(--border-color); color:var(--text-color); font-size:0.8em; outline:none; text-decoration:${textDecor}; width: 120px;" value="${s.name}" onchange="updateMapping('${manual}', ${i}, 'name', this.value)">
@@ -352,6 +431,11 @@ function buildSettingsUI() {
 
     pistonHtml += `</div></div>`;
     container.innerHTML += pistonHtml;
+
+    container.innerHTML += `<div style="margin-top: 25px; text-align: center; border-top: 1px solid var(--border-color); padding-top: 25px;">
+        <button class="nudge-btn" style="background: #c0392b; color: white; padding: 12px 24px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 5px;" onclick="resetToDefaults()">⚠️ Reset to Default W166 Settings</button>
+        <p style="color: #7f8c8d; font-size: 0.85em; margin-top: 10px;">This will safely restore all original ranks, CC values, and piston configurations.</p>
+    </div>`;
 }
 
 function buildTriStateBox(name, val, state, type = 'stop') {
@@ -369,25 +453,25 @@ function buildTriStateBox(name, val, state, type = 'stop') {
     </div>`;
 }
 
-function toggleRankVisibility(manualKey, index) {
+window.toggleRankVisibility = function(manualKey, index) {
     let stop = organStructure[manualKey][index];
     stop.visible = stop.visible === false ? true : false;
     buildSettingsUI();
     buildEditorUI();
-}
+};
 
-function switchPistonTab(index) {
+window.switchPistonTab = function(index) {
     editingPistonIndex = index;
     buildSettingsUI();
-}
+};
 
-function updatePistonName(index, newName) {
+window.updatePistonName = function(index, newName) {
     pistons[index].name = newName;
     buildSettingsUI();
     buildEditorUI();
-}
+};
 
-function setTriState(val, targetState, type) {
+window.setTriState = function(val, targetState, type) {
     let p = pistons[editingPistonIndex];
     if (type === 'swell') { p.swellState = targetState; } 
     else {
@@ -397,21 +481,21 @@ function setTriState(val, targetState, type) {
         else if (targetState === -1) p.offStops.push(val);
     }
     buildSettingsUI(); 
-}
+};
 
-function updateMapping(manualKey, index, type, newVal) {
+window.updateMapping = function(manualKey, index, type, newVal) {
     if (type === 'val') organStructure[manualKey][index].val = parseInt(newVal);
     if (type === 'name') organStructure[manualKey][index].name = newVal;
     buildSettingsUI(); buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
-}
+};
 
-function updateExpMapping(type, newVal) {
+window.updateExpMapping = function(type, newVal) {
     if (type === 'swell') swellCC = parseInt(newVal);
     if (type === 'perc') percCC = parseInt(newVal);
     buildSettingsUI(); buildEditorUI();
     if(currentMidi) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
-}
+};
 
 function buildEditorUI() {
     document.getElementById('col-countermelody').innerHTML = '';
@@ -450,13 +534,13 @@ function buildEditorUI() {
     document.getElementById('col-pistons').innerHTML = pistonsHtml;
 }
 
-function openTab(tabId, btnElement) {
+window.openTab = function(tabId, btnElement) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     if(btnElement) btnElement.classList.add('active');
     if (tabId === 'page-editor' && currentMidi) setTimeout(() => draw(), 10);
-}
+};
 
 // ==========================================
 // 3. IMPORT INTERCEPTOR & MODAL LOGIC
@@ -577,7 +661,7 @@ document.getElementById('midi-upload').addEventListener('change', async (e) => {
     }
 });
 
-function handleImportChoice(choice) {
+window.handleImportChoice = function(choice) {
     document.getElementById('import-modal').style.display = 'none';
     let sysTrack = getSystemTrack();
 
@@ -594,7 +678,7 @@ function handleImportChoice(choice) {
             finalizeImport();
         }
     }
-}
+};
 
 // BULK ACTION PROCESSING
 window.processRemap = function(unknowns) {
@@ -694,7 +778,9 @@ function finalizeImport() {
         filtersDiv.appendChild(btn);
     });
     const slider = document.getElementById('tick-slider'); slider.max = maxTicks + ppq; slider.value = 0; slider.disabled = false;
-    document.getElementById('zoom-slider').disabled = false; document.getElementById('current-tick').innerText = '0';
+    document.getElementById('zoom-slider').disabled = false; 
+    
+    updateDisplays(0);
     document.getElementById('export-btn').style.display = 'block'; 
     renderLog(); 
     syncSwitchesToTimeline(0); 
@@ -704,7 +790,8 @@ function finalizeImport() {
 window.addEventListener('resize', () => { if (currentMidi) draw(); });
 
 document.getElementById('tick-slider').addEventListener('input', (e) => {
-    const newTick = parseInt(e.target.value); document.getElementById('current-tick').innerText = newTick;
+    const newTick = parseInt(e.target.value); 
+    updateDisplays(newTick);
     syncSwitchesToTimeline(newTick); draw();
     if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(newTick); startTimeMs = performance.now(); }
 });
@@ -714,13 +801,14 @@ document.getElementById('zoom-slider').addEventListener('input', (e) => { docume
 function nudge(amount) {
     const slider = document.getElementById('tick-slider'); if (slider.disabled) return;
     let newVal = Math.max(0, Math.min(parseInt(slider.max), parseInt(slider.value) + amount));
-    slider.value = newVal; document.getElementById('current-tick').innerText = newVal;
+    slider.value = newVal; 
+    updateDisplays(newVal);
     syncSwitchesToTimeline(newVal); draw();
     if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(newVal); startTimeMs = performance.now(); }
 }
 
-function handleSwellToggle(isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); }
-function handleStopToggle(val, name, manual, isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(81, val, `${name} ON`, manual); else addEvent(80, val, `${name} OFF`, manual); }
+window.handleSwellToggle = function(isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); };
+window.handleStopToggle = function(val, name, manual, isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(81, val, `${name} ON`, manual); else addEvent(80, val, `${name} OFF`, manual); };
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); tbody.innerHTML = '';
@@ -736,17 +824,25 @@ function renderLog() {
             if (e.val === percCC) { foundName = "Percussion"; manual = "Perc"; }
             if (e.cc === 81) { label = foundName + " ON"; labelColor = "#27ae60"; } else { label = foundName + " OFF"; labelColor = "#e74c3c"; }
         }
-        tbody.innerHTML += `<tr><td><strong>${e.ticks}</strong></td><td>${manual}</td><td style="color:${labelColor}"><strong>${label}</strong></td><td><button class="del-btn" onclick="removeEvent(${e.cc}, ${e.val}, ${e.ticks})">X</button></td></tr>`;
+        
+        let displayTime = formatTimeDisplay(e.ticks);
+        
+        tbody.innerHTML += `<tr><td><strong>${displayTime}</strong></td><td>${manual}</td><td style="color:${labelColor}"><strong>${label}</strong></td><td><button class="del-btn" onclick="removeEvent(${e.cc}, ${e.val}, ${e.ticks})">X</button></td></tr>`;
     });
 }
 
-function applyRegistrationState(pistonIndex) {
+window.applyRegistrationState = function(pistonIndex) {
     if (!currentMidi) return alert("Please load a MIDI file first!");
     let p = pistons[pistonIndex];
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => { if (!window.pistonsAffectPercussion && (cc === 80 || cc === 81)) if (Math.round(e.value * 127) === percCC) return true; return Math.abs(e.ticks - baseTick) > 40; }); });
+    [swellCC, 80, 81].forEach(cc => { 
+        if (track.controlChanges[cc]) {
+            track.controlChanges[cc] = track.controlChanges[cc].filter(e => Math.abs(e.ticks - baseTick) > 40); 
+        }
+    });
+    
     let currentOffset = 0; 
     
     if (p.swellState !== 0) {
@@ -759,7 +855,6 @@ function applyRegistrationState(pistonIndex) {
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
     
     activeOrganStops.forEach(val => {
-        if (!window.pistonsAffectPercussion && val === percCC) return;
         let targetCC = null;
         if (p.activeStops.includes(val)) targetCC = 81;
         else if (p.offStops.includes(val)) targetCC = 80;
@@ -773,10 +868,11 @@ function applyRegistrationState(pistonIndex) {
     
     [swellCC, 80, 81].forEach(cc => { if(track.controlChanges[cc]) track.controlChanges[cc].sort((a,b) => a.ticks - b.ticks); });
     let syncTick = Math.min(parseInt(document.getElementById('tick-slider').max), baseTick + currentOffset);
-    document.getElementById('tick-slider').value = syncTick; document.getElementById('current-tick').innerText = syncTick;
+    document.getElementById('tick-slider').value = syncTick; 
+    updateDisplays(syncTick);
     renderLog(); syncSwitchesToTimeline(syncTick); draw(); 
     if (isPlaying) { killAllNotes(); startMidiSeconds = currentMidi.header.ticksToSeconds(syncTick); startTimeMs = performance.now(); }
-}
+};
 
 function addEvent(cc, val, label, manual) {
     if (!currentMidi) return;
@@ -790,11 +886,11 @@ function addEvent(cc, val, label, manual) {
     track.controlChanges[cc].sort((a, b) => a.ticks - b.ticks); renderLog(); draw(); 
 }
 
-function removeEvent(cc, val, tick) {
+window.removeEvent = function(cc, val, tick) {
     let track = getSystemTrack();
     if (track && track.controlChanges[cc]) track.controlChanges[cc] = track.controlChanges[cc].filter(e => !(e.ticks === tick && Math.round(e.value * 127) === val));
     renderLog(); syncSwitchesToTimeline(parseInt(document.getElementById('tick-slider').value)); draw();
-}
+};
 
 function syncSwitchesToTimeline(currentTick) {
     if (!currentMidi) return;
@@ -839,12 +935,14 @@ function draw() {
     ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo((currentTick - st) * scaleX, 0); ctx.lineTo((currentTick - st) * scaleX, rect.height); ctx.stroke();
 }
 
-function exportMidi() { if (!currentMidi) return; const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click(); }
+window.exportMidi = function() { if (!currentMidi) return; const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName + "_W166.mid"; a.click(); };
 
 // ==========================================
 // 3. WINDOW BINDINGS FOR HTML INTERACTION
 // ==========================================
-window.openTab = openTab; window.togglePlay = togglePlay; window.stopPlayback = stopPlayback; window.nudge = nudge; window.toggleDarkMode = toggleDarkMode; window.toggleMidiVals = toggleMidiVals; window.updateMapping = updateMapping; window.updateExpMapping = updateExpMapping; window.handleSwellToggle = handleSwellToggle; window.handleStopToggle = handleStopToggle; window.removeEvent = removeEvent; window.applyRegistrationState = applyRegistrationState; window.exportMidi = exportMidi; window.pistons = pistons; window.setTriState = setTriState; window.switchPistonTab = switchPistonTab; window.updatePistonName = updatePistonName; window.toggleRankVisibility = toggleRankVisibility; window.handleImportChoice = handleImportChoice;
-window.toggleRemapRow = toggleRemapRow; window.processRemap = processRemap; window.ignoreAllRemap = ignoreAllRemap; window.deleteAllRemap = deleteAllRemap; window.addRank = addRank; window.deleteRank = deleteRank;
+window.togglePlay = togglePlay;
+window.stopPlayback = stopPlayback;
+window.toggleDarkMode = toggleDarkMode;
+window.toggleMidiVals = toggleMidiVals;
 
 buildSettingsUI(); buildEditorUI();
