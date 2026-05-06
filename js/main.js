@@ -410,7 +410,7 @@ function getOrCreateSystemTrack() {
         trk = currentMidi.addTrack();
         trk.channel = 15;
     }
-    trk.channel = 15; // Ensure channel property stays accurate
+    trk.channel = 15; 
     return trk;
 }
 
@@ -1241,7 +1241,7 @@ function draw() {
 }
 
 // ==========================================
-// 11. THE TICK-BASED CLONE ENGINE
+// 11. THE DEEP-CLONE EXPORT ENGINE
 // ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
@@ -1249,66 +1249,68 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    // 1. Create a pure, empty MIDI file
-    const cleanExport = new Midi();
-    cleanExport.header.name = (songMetadata.title || "W166_Export").replace(/[^a-z0-9\s]/gi, '').trim().substring(0, 32);
-    
-    // CRITICAL FIX #1: Steal the exact PPQ from the old file so integer math never breaks
-    cleanExport.header.ppq = currentMidi.header.ppq || ppq;
-
-    // 2. The Blocklist to protect the hardware
-    const blockedCCs = [1, 7, 10, 91, 121]; 
-
-    // 3. Clone tracks safely
-    currentMidi.tracks.forEach(oldTrack => {
-        const hasNotes = oldTrack.notes.length > 0;
-        const hasCCs = Object.keys(oldTrack.controlChanges).some(ccNum => !blockedCCs.includes(parseInt(ccNum)));
-        
-        if (!hasNotes && !hasCCs) return;
-
-        const newTrack = cleanExport.addTrack();
-        
-        // CRITICAL FIX #2: All new events added to this track will permanently inherit this channel byte
-        newTrack.channel = parseInt(oldTrack.channel) || 0;
-        
-        if (oldTrack.name && !oldTrack.name.startsWith("W166_META")) {
-            newTrack.name = oldTrack.name.substring(0, 32); 
-        }
-
-        // CRITICAL FIX #3: Clone using raw integer 'ticks', sorted chronologically
-        let sortedNotes = [...oldTrack.notes].sort((a,b) => a.ticks - b.ticks);
-        sortedNotes.forEach(n => {
-            newTrack.addNote({
-                midi: n.midi,
-                ticks: n.ticks,
-                durationTicks: n.durationTicks,
-                velocity: n.velocity
-            });
-        });
-
-        // Clone CCs using raw integer 'ticks'
-        for (let ccNum in oldTrack.controlChanges) {
-            if (blockedCCs.includes(parseInt(ccNum))) continue;
-            
-            let sortedCCs = [...oldTrack.controlChanges[ccNum]].sort((a,b) => a.ticks - b.ticks);
-            sortedCCs.forEach(cc => {
-                newTrack.addCC({
-                    number: cc.number,
-                    ticks: cc.ticks,
-                    value: cc.value
-                });
-            });
+    // 1. Sort live events chronologically BEFORE cloning to prevent underflow
+    currentMidi.tracks.forEach(track => {
+        track.notes.sort((a, b) => a.ticks - b.ticks);
+        for (let ccNum in track.controlChanges) {
+            track.controlChanges[ccNum].sort((a, b) => a.ticks - b.ticks);
         }
     });
 
-    // 4. Export
+    // 2. Deep Clone via Binary to perfectly preserve PPQ and Tempos 
+    let cleanExport;
+    try {
+        cleanExport = new Midi(currentMidi.toArray());
+    } catch(e) {
+        return alert("MIDI Clock Sync Error: " + e.message);
+    }
+
+    // 3. Clean and Route the Clone
+    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
+    cleanExport.header.name = safeName.substring(0, 32);
+    cleanExport.name = safeName.substring(0, 32);
+
+    const blockedCCs = [1, 7, 10, 91, 121]; 
+    
+    // Process tracks backwards so we can safely delete empty ones
+    for (let i = cleanExport.tracks.length - 1; i >= 0; i--) {
+        let track = cleanExport.tracks[i];
+        track.channel = parseInt(track.channel) || 0;
+
+        if (track.name && track.name.startsWith("W166_META")) {
+            track.name = safeName.substring(0, 32);
+        }
+
+        // Purge DAW junk
+        blockedCCs.forEach(cc => {
+            if (track.controlChanges[cc]) {
+                delete track.controlChanges[cc];
+            }
+        });
+
+        const hasNotes = track.notes.length > 0;
+        const hasCCs = Object.keys(track.controlChanges).length > 0;
+
+        if (!hasNotes && !hasCCs) {
+            cleanExport.tracks.splice(i, 1);
+        } else {
+            // CRITICAL HARDWARE FIX: Force every internal event to broadcast on the Track's channel.
+            // Without this, imported CCs retain their old "Channel 1" tags and the physical organ ignores them.
+            track.notes.forEach(n => n.channel = track.channel);
+            for (let ccNum in track.controlChanges) {
+                track.controlChanges[ccNum].forEach(cc => cc.channel = track.channel);
+            }
+        }
+    }
+
+    // 4. Final Binary Export
     try {
         const blob = new Blob([cleanExport.toArray()], { type: "audio/midi" }); 
         const a = document.createElement("a"); 
         a.href = URL.createObjectURL(blob); 
         
-        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = safeName + "_mapped.mid"; 
+        let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = safeFilename + "_mapped.mid"; 
         a.click(); 
     } catch (e) {
         alert("Export Encoding Error: " + e.message);
