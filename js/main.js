@@ -268,7 +268,7 @@ const channelColors = [
 
 const groupColors = { "Countermelody": "#3498db", "Accompaniment": "#2ecc71", "Trumpetmelody": "#d4ac0d", "Bass": "#e74c3c", "Expression": "#8e44ad", "Presets": "#f39c12" };
 
-const SWELL_CC = 11; // STRICT HARDCODED SWELL
+const DEFAULT_SWELL_CC = 4;
 const DEFAULT_PERC_CC = 12;
 
 const DEFAULT_ORGAN_STRUCTURE = {
@@ -299,6 +299,7 @@ const DEFAULT_PISTONS = [
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
+let swellCC = DEFAULT_SWELL_CC;
 let percCC = DEFAULT_PERC_CC;
 let organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
 let pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
@@ -319,6 +320,7 @@ let editingPistonIndex = 0;
 
 window.resetToDefaults = function() {
     if (confirm("⚠️ Are you sure you want to restore the default Wurlitzer 166 settings? \n\nThis will erase any custom stops, remappings, and piston modifications you have made!")) {
+        swellCC = DEFAULT_SWELL_CC;
         percCC = DEFAULT_PERC_CC;
         organStructure = JSON.parse(JSON.stringify(DEFAULT_ORGAN_STRUCTURE));
         pistons = JSON.parse(JSON.stringify(DEFAULT_PISTONS));
@@ -398,8 +400,7 @@ function getSystemTrack() {
     return currentMidi.tracks.find(t => 
         t.channel === 15 || 
         (t.controlChanges[80] && t.controlChanges[80].length > 0) || 
-        (t.controlChanges[81] && t.controlChanges[81].length > 0) ||
-        (t.controlChanges[11] && t.controlChanges[11].length > 0)
+        (t.controlChanges[81] && t.controlChanges[81].length > 0)
     );
 }
 
@@ -409,7 +410,7 @@ function getOrCreateSystemTrack() {
         trk = currentMidi.addTrack();
         trk.channel = 15;
     }
-    trk.channel = 15; 
+    trk.channel = 15; // Ensure channel property stays accurate
     return trk;
 }
 
@@ -417,7 +418,7 @@ function getOrCreateSystemTrack() {
 // 6. SETTINGS & MAPPING UI
 // ==========================================
 window.addRank = function(manualKey) {
-    let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, SWELL_CC, 80, 81]);
+    let usedCCs = Object.values(organStructure).flat().map(s => s.val).concat([percCC, swellCC, 80, 81]);
     let newVal = 21; 
     while (usedCCs.includes(newVal) && newVal < 120) { newVal++; }
     
@@ -469,7 +470,7 @@ function buildSettingsUI() {
     
     globalHtml += `<div style="border-left: 3px solid #8e44ad; padding-left: 8px; background: var(--manual-bg); border-radius: 4px; padding-right:8px; padding-bottom:10px;">
         <h4 style="margin: 5px 0; color: #8e44ad; font-size: 0.85em;">Expression</h4>
-        <div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px;"><span class="mapping-input" style="width: 40px; padding: 2px; text-align:center; background:rgba(255,255,255,0.1);">${SWELL_CC}</span><span style="font-size:0.8em; color:#8e44ad; font-weight:bold;">Swell (Locked)</span></div>
+        <div style="display:flex; align-items:center; gap: 5px; margin-bottom: 3px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${swellCC}" onchange="updateExpMapping('swell', this.value)"><span style="font-size:0.8em;">Swell</span></div>
         <div style="display:flex; align-items:center; gap: 5px;"><input type="number" class="mapping-input" style="width: 40px; padding: 2px;" value="${percCC}" onchange="updateExpMapping('perc', this.value)"><span style="font-size:0.8em;">Percussion</span></div>
     </div></div></div>`;
     
@@ -502,7 +503,7 @@ function buildSettingsUI() {
     
     let percState = piston.activeStops.includes(percCC) ? 1 : (piston.offStops.includes(percCC) ? -1 : 0);
     pistonHtml += buildTriStateBox("Percussion", percCC, percState, 'stop');
-    pistonHtml += buildTriStateBox("Swell Shutters", SWELL_CC, piston.swellState, 'swell');
+    pistonHtml += buildTriStateBox("Swell Shutters", swellCC, piston.swellState, 'swell');
 
     pistonHtml += `</div></div>`;
     container.innerHTML += pistonHtml;
@@ -566,6 +567,7 @@ window.updateMapping = function(manualKey, index, type, newVal) {
 };
 
 window.updateExpMapping = function(type, newVal) {
+    if (type === 'swell') swellCC = parseInt(newVal);
     if (type === 'perc') percCC = parseInt(newVal);
     buildSettingsUI(); buildEditorUI();
     if(currentMidi && document.getElementById('tick-slider')) { syncSwitchesToTimeline(document.getElementById('tick-slider').value); renderLog(); }
@@ -600,7 +602,7 @@ function buildEditorUI() {
     }
 
     const expDiv = document.createElement('div'); expDiv.className = 'manual-group'; expDiv.style.borderLeftColor = "#8e44ad";
-    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${SWELL_CC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion Master <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion Master', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
+    expDiv.innerHTML = `<h4 style="color: #8e44ad;">Expression & Percussion</h4><div class="stop-grid"><div class="stop-row"><span class="stop-name" style="color: #8e44ad;">Swell Shutters <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(CC ${swellCC})</span></span><label class="switch"><input type="checkbox" id="swell-switch" onchange="handleSwellToggle(this.checked)"><span class="slider-switch swell-bg"></span></label></div><div class="stop-row"><span class="stop-name">Percussion Master <span class="midi-val" style="color: #7f8c8d; font-weight: normal;">(${percCC})</span></span><label class="switch"><input type="checkbox" id="stop-${percCC}" onchange="handleStopToggle(${percCC}, 'Percussion Master', 'Perc', this.checked)"><span class="slider-switch"></span></label></div></div>`;
     document.getElementById('col-bass-exp').appendChild(expDiv);
 
     let pistonsHtml = `<div class="manual-group" style="border-left-color: #f39c12; flex: 1;"><h4 style="color: #f39c12;">Saved Pistons</h4><div class="stop-grid" style="gap: 5px;">`;
@@ -630,7 +632,7 @@ function getUnknownStops(track) {
     [80, 81].forEach(cc => {
         if (track.controlChanges[cc]) {
             track.controlChanges[cc].forEach(e => {
-                let val = Math.round(e.value); 
+                let val = Math.round(e.value * 127);
                 if (!knownVals.includes(val)) foundVals.add(val);
             });
         }
@@ -726,6 +728,7 @@ window.handleImportChoice = function(choice) {
 
     if (choice === 'clear') {
         if (sysTrack) {
+            // Safely remove the sysTrack without completely recreating the array
             for (let i = currentMidi.tracks.length - 1; i >= 0; i--) {
                 if (currentMidi.tracks[i] === sysTrack) {
                     currentMidi.tracks.splice(i, 1);
@@ -759,7 +762,7 @@ window.processRemap = function(unknowns) {
                     if(sysTrack.controlChanges[cc]) {
                         let arr = sysTrack.controlChanges[cc];
                         for(let i = arr.length - 1; i >= 0; i--) {
-                            if (Math.round(arr[i].value) === val) arr.splice(i, 1);
+                            if (Math.round(arr[i].value * 127) === val) arr.splice(i, 1);
                         }
                     }
                 });
@@ -821,7 +824,7 @@ window.deleteAllRemap = function(unknowns) {
                 if(sysTrack.controlChanges[cc]) {
                     let arr = sysTrack.controlChanges[cc];
                     for (let i = arr.length - 1; i >= 0; i--) {
-                        if (Math.round(arr[i].value) === val) arr.splice(i, 1);
+                        if (Math.round(arr[i].value * 127) === val) arr.splice(i, 1);
                     }
                 }
             });
@@ -956,6 +959,7 @@ window.applyRoutingAndStart = function() {
         if(select) channelMap[ch] = select.value;
     });
 
+    // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
     const targetMap = {
         "1": { ch: 0, name: "Percussion", gm: 115 }, 
         "2": { ch: 1, name: "Accompaniment", gm: 4 }, 
@@ -981,6 +985,7 @@ window.applyRoutingAndStart = function() {
         }
     });
 
+    // Splice array safely instead of overwriting reference
     for (let i = currentMidi.tracks.length - 1; i >= 0; i--) {
         if (tracksToRemove.includes(currentMidi.tracks[i])) currentMidi.tracks.splice(i, 1);
     }
@@ -991,6 +996,7 @@ window.applyRoutingAndStart = function() {
 function finalizeImport() {
     let maxTicks = 0; minMidiNote = 127; maxMidiNote = 0; let activeChannels = new Set(); hiddenChannels.clear();
     
+    // EXTRACT METADATA IF EXISTS
     let sysTrack = getSystemTrack();
     if (sysTrack && sysTrack.name && sysTrack.name.startsWith("W166_META:")) {
         try {
@@ -1061,34 +1067,20 @@ function nudge(amount) {
 }
 
 // ==========================================
-// 10. STRICT SWITCH LOGIC & RENDER ENGINE
+// 10. SWITCH LOGIC & RENDER ENGINE
 // ==========================================
-window.handleSwellToggle = function(isChecked) { 
-    if (isUpdatingSwitches) return; 
-    if (isChecked) addEvent(SWELL_CC, 127, 'Swell OPEN', 'Exp'); 
-    else addEvent(SWELL_CC, 64, 'Swell CLOSED', 'Exp'); 
-};
-
-window.handleStopToggle = function(val, name, manual, isChecked) { 
-    if (isUpdatingSwitches) return; 
-    if (isChecked) addEvent(81, val, `${name} ON`, manual); 
-    else addEvent(80, val, `${name} OFF`, manual); 
-};
+window.handleSwellToggle = function(isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(swellCC, 127, 'Swell OPEN', 'Exp'); else addEvent(swellCC, 64, 'Swell CLOSED', 'Exp'); };
+window.handleStopToggle = function(val, name, manual, isChecked) { if (isUpdatingSwitches) return; if (isChecked) addEvent(81, val, `${name} ON`, manual); else addEvent(80, val, `${name} OFF`, manual); };
 
 function renderLog() {
     const tbody = document.getElementById('log-body'); if(!tbody) return;
     tbody.innerHTML = '';
     if (!currentMidi) return; let track = getSystemTrack(); if (!track) return;
-    let events = []; 
-    [SWELL_CC, 80, 81].forEach(cc => { 
-        if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { 
-            events.push({ cc: cc, val: Math.round(e.value), ticks: e.ticks }); 
-        }); 
-    });
+    let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
     events.sort((a, b) => b.ticks - a.ticks);
     events.forEach(e => {
         let label = ""; let manual = "Sys"; let labelColor = "var(--text-color)";
-        if (e.cc === SWELL_CC) { label = e.val >= 127 ? "Swell OPEN" : "Swell CLOSED"; manual = "Exp"; labelColor = "#9b59b6"; }
+        if (e.cc === swellCC) { label = e.val >= 127 ? "Swell OPEN" : "Swell CLOSED"; manual = "Exp"; labelColor = "#9b59b6"; }
         else {
             let foundName = "Unknown";
             for (const [man, stops] of Object.entries(organStructure)) { let stop = stops.find(s => s.val === e.val); if (stop) { foundName = stop.name; manual = man.split(' ')[0]; break; } }
@@ -1108,11 +1100,12 @@ window.applyRegistrationState = function(pistonIndex) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    [SWELL_CC, 80, 81].forEach(cc => { 
+    // Safely delete surrounding events using splice (Prevents memory reference break)
+    [swellCC, 80, 81].forEach(cc => { 
         if (track.controlChanges[cc]) {
             let arr = track.controlChanges[cc];
             for (let i = arr.length - 1; i >= 0; i--) {
-                if (arr[i].ticks === baseTick) {
+                if (Math.abs(arr[i].ticks - baseTick) <= 40) {
                     arr.splice(i, 1);
                 }
             }
@@ -1121,10 +1114,11 @@ window.applyRegistrationState = function(pistonIndex) {
     
     let currentOffset = 0; 
     
+    // Use official Tone.js addCC object instantiation
     if (p.swellState !== 0) {
         let swellVal = p.swellState === 1 ? 127 : 64;
-        track.addCC({ number: SWELL_CC, value: swellVal, ticks: baseTick + currentOffset });
-        currentOffset++; 
+        track.addCC({ ticks: baseTick + currentOffset, number: swellCC, value: swellVal / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+        currentOffset++;
     }
     
     let activeOrganStops = Object.values(organStructure).flat().filter(s => s.visible !== false).map(s => s.val).concat([percCC]);
@@ -1135,10 +1129,8 @@ window.applyRegistrationState = function(pistonIndex) {
         else if (p.offStops.includes(val)) targetCC = 80;
         
         if (targetCC !== null) {
-            let rawInt = Math.round(val);
-            if (rawInt < 0) rawInt = 0; if (rawInt > 127) rawInt = 127;
-            track.addCC({ number: targetCC, value: rawInt, ticks: baseTick + currentOffset });
-            currentOffset++; 
+            track.addCC({ ticks: baseTick + currentOffset, number: targetCC, value: val / 127, time: currentMidi.header.ticksToSeconds(baseTick + currentOffset) });
+            currentOffset++;
         }
     });
     
@@ -1154,18 +1146,14 @@ function addEvent(cc, val, label, manual) {
     let baseTick = parseInt(document.getElementById('tick-slider').value);
     let track = getOrCreateSystemTrack();
     
-    let rawVal = Math.round(val);
-    if (rawVal < 0) rawVal = 0; if (rawVal > 127) rawVal = 127;
-
-    [SWELL_CC, 80, 81].forEach(checkCc => { 
+    // Splice conflict deletion
+    [swellCC, 80, 81].forEach(checkCc => { 
         if (track.controlChanges[checkCc]) {
             let arr = track.controlChanges[checkCc];
             for(let i = arr.length - 1; i >= 0; i--) {
                 let e = arr[i];
-                if (e.ticks === baseTick) {
-                    let isConflict = ((cc === SWELL_CC && checkCc === SWELL_CC) || ((cc === 80 || cc === 81) && (checkCc === 80 || checkCc === 81) && Math.round(e.value) === rawVal));
-                    if (isConflict) arr.splice(i, 1);
-                }
+                let isConflict = ((cc === swellCC && checkCc === swellCC) || (Math.round(e.value * 127) === val));
+                if (isConflict && Math.abs(e.ticks - baseTick) <= 10) arr.splice(i, 1);
             }
         }
     });
@@ -1173,7 +1161,8 @@ function addEvent(cc, val, label, manual) {
     let safeTick = baseTick; 
     while (track.controlChanges[cc] && track.controlChanges[cc].some(e => e.ticks === safeTick)) { safeTick++; }
     
-    track.addCC({ number: cc, value: rawVal, ticks: safeTick });
+    // Official addCC instantiation
+    track.addCC({ ticks: safeTick, number: cc, value: val / 127, time: currentMidi.header.ticksToSeconds(safeTick) });
     renderLog(); draw(); 
 }
 
@@ -1182,7 +1171,7 @@ window.removeEvent = function(cc, val, tick) {
     if (track && track.controlChanges[cc]) {
         let arr = track.controlChanges[cc];
         for (let i = arr.length - 1; i >= 0; i--) {
-            if (arr[i].ticks === tick && Math.round(arr[i].value) === val) {
+            if (arr[i].ticks === tick && Math.round(arr[i].value * 127) === val) {
                 arr.splice(i, 1);
             }
         }
@@ -1196,13 +1185,8 @@ function syncSwitchesToTimeline(currentTick) {
     let track = getSystemTrack();
     let stopStates = {}; let swellState = false; 
     if (track) {
-        let events = []; 
-        [SWELL_CC, 80, 81].forEach(cc => { 
-            if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { 
-                if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value), ticks: e.ticks }); 
-            }); 
-        });
-        events.sort((a, b) => a.ticks - b.ticks).forEach(e => { if (e.cc === 81) stopStates[e.val] = true; if (e.cc === 80) stopStates[e.val] = false; if (e.cc === SWELL_CC) swellState = (e.val >= 127); });
+        let events = []; [swellCC, 80, 81].forEach(cc => { if (track.controlChanges[cc]) track.controlChanges[cc].forEach(e => { if (e.ticks <= currentTick) events.push({ cc: cc, val: Math.round(e.value * 127), ticks: e.ticks }); }); });
+        events.sort((a, b) => a.ticks - b.ticks).forEach(e => { if (e.cc === 81) stopStates[e.val] = true; if (e.cc === 80) stopStates[e.val] = false; if (e.cc === swellCC) swellState = (e.val >= 127); });
     }
     Object.values(organStructure).flat().forEach(s => { 
         if (s.visible === false) return;
@@ -1248,12 +1232,12 @@ function draw() {
     
     let trk = getSystemTrack();
     if (trk) {
-        [SWELL_CC, 80, 81].forEach(cc => { 
+        [swellCC, 80, 81].forEach(cc => { 
             if (trk.controlChanges[cc]) {
                 trk.controlChanges[cc].forEach(e => { 
                     if (e.ticks >= st && e.ticks <= st + windowTicks) { 
-                        ctx.fillStyle = cc === SWELL_CC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); 
-                        ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === SWELL_CC ? 16 : 0, 4, 12); 
+                        ctx.fillStyle = cc === swellCC ? '#9b59b6' : (cc === 81 ? '#2ecc71' : '#e74c3c'); 
+                        ctx.fillRect(((e.ticks - st) * scaleX) - 2, cc === swellCC ? 16 : 0, 4, 12); 
                     } 
                 }); 
             }
@@ -1265,7 +1249,7 @@ function draw() {
 }
 
 // ==========================================
-// 11. DETERMINISTIC AIRTIGHT EXPORT ENGINE
+// 11. EXPORT & INIT
 // ==========================================
 window.exportMidi = function() { 
     if (!currentMidi) return; 
@@ -1273,186 +1257,28 @@ window.exportMidi = function() {
     songMetadata.modified = getTodayString();
     buildMetadataUI();
 
-    // CRITICAL FIX: Do NOT use getOrCreateSystemTrack() here. 
-    // It might hijack a music track if the original file had mixed CCs.
-    // We explicitly isolate/create the Channel 16 hardware track.
-    let exportSysTrack = currentMidi.tracks.find(t => t.channel === 15);
-    if (!exportSysTrack) {
-        exportSysTrack = currentMidi.addTrack();
-        exportSysTrack.channel = 15; 
-    }
-    exportSysTrack.name = "W166_META:" + JSON.stringify(songMetadata);
+    let sysTrack = getOrCreateSystemTrack();
     
-    let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9\s]/gi, '').trim();
-    currentMidi.header.name = safeName.substring(0, 32);
-    currentMidi.name = safeName.substring(0, 32);
+    // SANITIZE ENCODING: Strips non-ASCII characters to prevent fatal byte-length VLQ mismatches
+    let safeJsonString = JSON.stringify(songMetadata).replace(/[^\x20-\x7E]/g, '');
+    sysTrack.name = "W166_META:" + safeJsonString;
     
-    let allSystemEvents = [];
-
-    // PASS 1: CLEANUP AND COLLECTION
+    let safeHeaderString = (songMetadata.title || "Export").replace(/[^\x20-\x7E]/g, '');
+    currentMidi.header.name = safeHeaderString;
+    currentMidi.name = safeHeaderString;
+    
+    // Strip manual channel overwriting to prevent class corruption
     currentMidi.tracks.forEach(t => {
-        t.channel = parseInt(t.channel) || 0;
-
-        // Trash DAW junk
-        [1, 7, 10, 91, 121].forEach(cc => { if (t.controlChanges[cc]) delete t.controlChanges[cc]; });
-
-        // Collect ALL system CCs from EVERY track so they can be securely merged to Channel 16
-        [SWELL_CC, 80, 81].forEach(ccNum => {
-            if (t.controlChanges[ccNum]) {
-                t.controlChanges[ccNum].forEach(e => {
-                    let rawVal = Math.round(e.value);
-                    if (rawVal < 0) rawVal = 0;
-                    if (rawVal > 127) rawVal = 127;
-                    allSystemEvents.push({ cc: ccNum, val: rawVal, ticks: e.ticks });
-                });
-            }
-        });
-
-        // Wipe system events from this track (they are safely in the array now)
-        if (t.controlChanges[SWELL_CC]) delete t.controlChanges[SWELL_CC];
-        if (t.controlChanges[80]) delete t.controlChanges[80];
-        if (t.controlChanges[81]) delete t.controlChanges[81];
-
-        // Format notes and channels
-        if (t === exportSysTrack || t.channel === 15) {
-            // ONLY wipe notes if this is the explicitly isolated hardware Channel 16
-            t.notes = []; 
-        } else {
-            // PRESERVE ALL MUSIC NOTES
-            t.notes.sort((a, b) => a.ticks - b.ticks);
-            t.notes.forEach(n => n.channel = t.channel);
-            
-            for (let ccNum in t.controlChanges) {
-                t.controlChanges[ccNum].sort((a, b) => a.ticks - b.ticks);
-                t.controlChanges[ccNum].forEach(cc => cc.channel = t.channel);
-            }
-        }
+        t.channel = parseInt(t.channel) || 0; 
     });
-
-    // PASS 2: DETERMINISTIC PIPELINE (SORT, DEDUP, HARDENED SPACING)
-    allSystemEvents.sort((a, b) => a.ticks - b.ticks);
-    
-    let dedupedEvents = [];
-    for (let i = 0; i < allSystemEvents.length; i++) {
-        let e = { ...allSystemEvents[i] }; 
-        let isDuplicate = false;
-
-        if (dedupedEvents.length > 0) {
-            let prev = dedupedEvents[dedupedEvents.length - 1];
-            if (prev.ticks === e.ticks && prev.cc === e.cc && prev.val === e.val) {
-                isDuplicate = true;
-            }
-        }
-        
-        if (!isDuplicate) {
-            dedupedEvents.push(e);
-        }
-    }
-
-    let cleanSystemEvents = [];
-    let lastTickUsed = -1;
-
-    dedupedEvents.forEach(e => {
-        let spacedEvent = { ...e };
-        if (spacedEvent.ticks <= lastTickUsed) {
-            spacedEvent.ticks = lastTickUsed + 1;
-        }
-        lastTickUsed = spacedEvent.ticks;
-        cleanSystemEvents.push(spacedEvent);
-    });
-
-    cleanSystemEvents.sort((a, b) => a.ticks - b.ticks);
-
-    // PASS 3: REBUILD SINGLE SOURCE OF TRUTH
-    cleanSystemEvents.forEach(e => {
-        exportSysTrack.addCC({ number: e.cc, value: e.val, ticks: e.ticks });
-    });
-    
-    if (exportSysTrack.controlChanges) {
-        Object.values(exportSysTrack.controlChanges).flat().forEach(cc => cc.channel = 15);
-    }
-
-    // PASS 4: PRE-FLIGHT VALIDATION CHECK
-    let isExportValid = true;
-    let validationLog = [];
-
-    let sysEventsForValidation = [];
-    if (exportSysTrack) {
-        for (let ccNum in exportSysTrack.controlChanges) {
-            exportSysTrack.controlChanges[ccNum].forEach(cc => {
-                sysEventsForValidation.push({ cc: parseInt(ccNum), val: cc.value, ticks: cc.ticks });
-            });
-        }
-        sysEventsForValidation.sort((a, b) => a.ticks - b.ticks);
-    }
-
-    let lastCC = null;
-    let lastVal = -1;
-    let lastTick = -1;
-
-    sysEventsForValidation.forEach(cc => {
-        if (cc.ticks < lastTick) {
-            isExportValid = false;
-            validationLog.push(`System Track has backwards time jumps.`);
-        }
-
-        if (cc.val < 0 || cc.val > 127 || !Number.isInteger(cc.val)) {
-            isExportValid = false;
-            validationLog.push(`System Track value out of bounds or float: ${cc.val}`);
-        }
-
-        if (cc.ticks === lastTick) {
-            if ((cc.cc === 80 || cc.cc === 81) && (lastCC === 80 || lastCC === 81) && cc.val === lastVal) {
-                isExportValid = false;
-                validationLog.push(`ON/OFF conflict at tick ${cc.ticks} for stop ${cc.val}`);
-            }
-
-            if (cc.cc === SWELL_CC && lastCC === SWELL_CC && cc.val !== lastVal) {
-                isExportValid = false;
-                validationLog.push(`Multiple swell states at same tick ${cc.ticks}`);
-            }
-        }
-
-        lastTick = cc.ticks;
-        lastCC = cc.cc;
-        lastVal = cc.val;
-    });
-
-    currentMidi.tracks.forEach(t => {
-        let hasSystemData = (t.controlChanges[SWELL_CC] && t.controlChanges[SWELL_CC].length > 0) || 
-                            (t.controlChanges[80] && t.controlChanges[80].length > 0) || 
-                            (t.controlChanges[81] && t.controlChanges[81].length > 0);
-                            
-        if (t !== exportSysTrack && hasSystemData) {
-            isExportValid = false;
-            validationLog.push(`Track ${t.channel + 1} contains illegal System CCs.`);
-        }
-
-        if (t !== exportSysTrack) {
-            for (let ccNum in t.controlChanges) {
-                t.controlChanges[ccNum].forEach(cc => {
-                    if (cc.value < 0 || cc.value > 127 || !Number.isInteger(cc.value)) {
-                        isExportValid = false;
-                        validationLog.push(`Track ${t.channel + 1} CC ${ccNum} value out of bounds or float: ${cc.value}`);
-                    }
-                });
-            }
-        }
-    });
-
-    if (!isExportValid) {
-        alert("CRITICAL ERROR: Export rejected due to validation failure.\n\n" + validationLog.join("\n"));
-        console.error("MIDI Verification Failed:", validationLog);
-        return; 
-    }
 
     try {
         const blob = new Blob([currentMidi.toArray()], { type: "audio/midi" }); 
         const a = document.createElement("a"); 
         a.href = URL.createObjectURL(blob); 
         
-        let safeFilename = safeName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = safeFilename + "_mapped.mid"; 
+        let safeName = (songMetadata.title || "Export").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = safeName + "_mapped.mid"; 
         a.click(); 
     } catch (e) {
         alert("Export Encoding Error: " + e.message);
@@ -1471,4 +1297,3 @@ buildEditorUI();
 window.togglePlay = togglePlay;
 window.stopPlayback = stopPlayback;
 window.hardReset = hardReset;
-window.openTab = openTab;
