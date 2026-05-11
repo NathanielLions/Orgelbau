@@ -235,20 +235,20 @@ const DEFAULT_PERC_CC = 12;
 
 const DEFAULT_ORGAN_STRUCTURE = {
     "Accompaniment (Ch 2)": [ 
-        { val: 70, name: "Open Flute", visible: true }, { val: 48, name: "Strings", visible: true }, { val: 11, name: "Stopped Flute", visible: true } 
+        { val: 70, name: "Open Flute", visible: true }, { val: 11, name: "Stopped Flute", visible: true }, { val: 48, name: "Strings 8", visible: true } , { val: 88, name: "Strings 4", visible: true }
     ],
     "Trumpetmelody (Ch 3)": [ 
-        { val: 68, name: "Viola Bassoon", visible: true }, { val: 56, name: "Wooden Trumpet", visible: true }, { val: 61, name: "Brass Trumpet", visible: true },
+        { val: 68, name: "Baritone", visible: true }, { val: 56, name: "Trumpet", visible: true }, { val: 61, name: "Horn", visible: true },
         { val: 42, name: "Cello", visible: true } 
     ],
     "Countermelody (Ch 4)": [ 
         { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
-        { val: 20, name: "Undamaris", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
-        { val: 73, name: "Harmonic Flute", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true }, { val: 83, name: "Bourdon 4", visible: true },
-        { val: 86, name: "Bourdon 8", visible: true }, { val: 87, name: "Flute 8", visible: true }, { val: 89, name: "Celeste", visible: true }
+        { val: 20, name: "Celeste", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
+        { val: 73, name: "Piccolo", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true }, { val: 83, name: "Tibia", visible: true },
+        { val: 86, name: "Bourdon", visible: true }, { val: 87, name: "Flute", visible: true }
     ],
     "Bass (Ch 4)": [ 
-        { val: 57, name: "Wooden Trombone", visible: true }, { val: 50, name: "Brass Trombone", visible: true }, { val: 58, name: "Bass Flute", visible: true }
+        { val: 57, name: "Trombone", visible: true }, { val: 50, name: "Tuba", visible: true }, { val: 58, name: "Bass Flute", visible: true }
     ]
 };
 
