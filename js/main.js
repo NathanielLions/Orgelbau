@@ -117,6 +117,30 @@ function getActiveStopsForChannel(channel) {
 
 function scheduleNotePlay(note, channel, delaySeconds) {
     let playTime = audioCtx.currentTime + delaySeconds;
+    
+    // Handle Rhythm Track (Channel 10 / index 9)
+    if (channel === 9) {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        
+        // Use a noise-like quality for rhythm
+        osc.type = 'triangle';
+        // Lower frequency for bass notes, higher for snare-range
+        let freq = note.midi < 40 ? 60 : 200; 
+        osc.frequency.setValueAtTime(freq, playTime);
+        osc.frequency.exponentialRampToValueAtTime(10, playTime + 0.1);
+
+        gain.gain.setValueAtTime(0.1, playTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, playTime + 0.1);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(playTime);
+        osc.stop(playTime + 0.1);
+        activeOscillators.push(osc);
+        return; 
+    }
+
     let activeStops = getActiveStopsForChannel(channel);
     
     if (activeStops.length === 0) return; 
@@ -780,7 +804,7 @@ window.buildRoutingUI = function() {
         routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--stop-row-bg); padding:12px; border-radius:5px; border-left: 5px solid ${color}; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
             <span style="font-weight:bold; color: var(--text-color);">Incoming Channel ${ch + 1}${chNameExt}</span>
             <select id="route-ch-${ch}" class="mapping-input" style="width: 250px; cursor: pointer; font-size: 0.95em;">
-                <option value="1" ${sel1}>Percussion (Out Ch 1)</option>
+                <option value="1" ${sel1}>Percussion (Out Ch 10 - Rhythm)</option>
                 <option value="2" ${sel2}>Accompaniment (Out Ch 2)</option>
                 <option value="3" ${sel3}>Trumpetmelody (Out Ch 3)</option>
                 <option value="4-counter" ${sel4c}>Countermelody (Out Ch 4)</option>
@@ -809,7 +833,7 @@ window.applyRoutingAndStart = function() {
 
     // GENERAL MIDI (GM) DESCRIPTIVE INSTRUMENT MAP
     const targetMap = {
-        "1": { ch: 0, name: "Percussion", gm: 115 }, // 115 = Woodblock / Trap Drums
+        "1": { ch: 9, name: "Percussion (Rhythm)", gm: 115 }, // 115 = Woodblock / Trap Drums, Ch 9 = MIDI Ch 10 Rhythm
         "2": { ch: 1, name: "Accompaniment", gm: 4 }, // 4 = Electric Piano 1
         "3": { ch: 2, name: "Trumpetmelody", gm: 56 }, // 56 = Trumpet
         "4-counter": { ch: 3, name: "Countermelody", gm: 0 }, // 0 = Acoustic Grand Piano
