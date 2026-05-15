@@ -50,8 +50,8 @@ function stopPlayback() {
     document.getElementById('play-btn').innerText = "▶ Play";
     document.getElementById('tick-slider').value = 0;
     updateDisplays(0);
-    if(typeof syncSwitchesToTimeline === 'function') syncSwitchesToTimeline(0);
-    if(typeof draw === 'function') draw();
+    syncSwitchesToTimeline(0);
+    draw();
     killAllNotes();
 }
 
@@ -75,10 +75,10 @@ function scheduler() {
     
     document.getElementById('tick-slider').value = newTick;
     updateDisplays(newTick);
-    if(typeof syncSwitchesToTimeline === 'function') syncSwitchesToTimeline(newTick);
-    if(typeof draw === 'function') draw();
+    syncSwitchesToTimeline(newTick);
+    draw();
     
-    let lookaheadSeconds = 0.1;
+    let lookaheadSeconds = 0.1; 
     let lookaheadMidiSeconds = currentMidiSeconds + lookaheadSeconds;
     
     currentMidi.tracks.forEach(track => {
@@ -93,6 +93,7 @@ function scheduler() {
             }
         });
     });
+    
     requestAnimationFrame(scheduler);
 }
 
@@ -101,7 +102,7 @@ function getActiveStopsForChannel(channel) {
     for (const [manual, stops] of Object.entries(organStructure)) {
         let match = manual.match(/Ch (\d+)/);
         if (match) {
-            let rawChannel = parseInt(match[1]) - 1;
+            let rawChannel = parseInt(match[1]) - 1; 
             if (rawChannel === channel) {
                 stops.forEach(s => {
                     if (s.visible === false) return;
@@ -117,10 +118,14 @@ function getActiveStopsForChannel(channel) {
 function scheduleNotePlay(note, channel, delaySeconds) {
     let playTime = audioCtx.currentTime + delaySeconds;
     
+    // Handle Rhythm Track (Channel 10 / index 9)
     if (channel === 9) {
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
+        
+        // Use a noise-like quality for rhythm
         osc.type = 'triangle';
+        // Lower frequency for bass notes, higher for snare-range
         let freq = note.midi < 40 ? 60 : 200; 
         osc.frequency.setValueAtTime(freq, playTime);
         osc.frequency.exponentialRampToValueAtTime(10, playTime + 0.1);
@@ -137,8 +142,9 @@ function scheduleNotePlay(note, channel, delaySeconds) {
     }
 
     let activeStops = getActiveStopsForChannel(channel);
-    if (activeStops.length === 0) return;
     
+    if (activeStops.length === 0) return; 
+
     let attack = 0.02;
     let release = 0.02;
     if (note.duration < 0.04) {
@@ -150,19 +156,21 @@ function scheduleNotePlay(note, channel, delaySeconds) {
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         
-        // Dynamically applies the chosen waveType
-        osc.type = stop.waveType || 'square';
+        if ([8, 10, 11].includes(stop.val)) osc.type = 'sine'; 
+        else if ([19, 20, 73, 75, 70, 58].includes(stop.val)) osc.type = 'triangle';
+        else if ([40, 82, 68, 48, 50, 42].includes(stop.val)) osc.type = 'sawtooth'; 
+        else if ([56, 57, 61, 71].includes(stop.val)) osc.type = 'square';
+        else osc.type = 'square';
         
         osc.frequency.value = Math.pow(2, (note.midi - 69) / 12) * 440;
         
-        let swellSwitch = document.getElementById('swell-switch');
-        let swellVal = (swellSwitch && swellSwitch.checked) ? 1.0 : 0.4;
+        let swellVal = document.getElementById('swell-switch').checked ? 1.0 : 0.4;
         let peakVolume = 0.08 * swellVal;
         
         gain.gain.setValueAtTime(0, playTime);
         gain.gain.linearRampToValueAtTime(peakVolume, playTime + attack); 
         gain.gain.setValueAtTime(peakVolume, Math.max(playTime + attack, playTime + note.duration - release)); 
-        gain.gain.linearRampToValueAtTime(0, playTime + note.duration);
+        gain.gain.linearRampToValueAtTime(0, playTime + note.duration); 
         
         osc.connect(gain);
         gain.connect(audioCtx.destination);
@@ -182,17 +190,16 @@ let timeDisplayFormat = 'ticks';
 
 window.updateTimeFormat = function(format) {
     timeDisplayFormat = format;
-    let lbl = format === 'time' ? "Time" : (format === 'measures' ? "Meas" : "Tick");
+    let lbl = "Tick";
+    if (format === 'time') lbl = "Time";
+    if (format === 'measures') lbl = "Meas";
     
-    let timeLabel = document.getElementById('time-label');
-    let logHeader = document.getElementById('log-time-header');
-    if (timeLabel) timeLabel.innerText = lbl;
-    if (logHeader) logHeader.innerText = lbl;
+    document.getElementById('time-label').innerText = lbl;
+    document.getElementById('log-time-header').innerText = lbl;
     
-    let currentTick = parseInt(document.getElementById('tick-slider')?.value || 0);
+    let currentTick = parseInt(document.getElementById('tick-slider').value) || 0;
     updateDisplays(currentTick);
-    if (typeof renderLog === 'function') renderLog(); 
-    if (typeof saveWorkspace === 'function') saveWorkspace();
+    renderLog(); 
 };
 
 function formatTimeDisplay(ticks) {
@@ -212,12 +219,12 @@ function formatTimeDisplay(ticks) {
 }
 
 function updateDisplays(tickValue) {
-    let tickDisplay = document.getElementById('current-tick');
-    if (tickDisplay) tickDisplay.innerText = formatTimeDisplay(tickValue);
+    document.getElementById('current-tick').innerText = formatTimeDisplay(tickValue);
 }
 
-window.nudgeTicks = function(amount) { if(typeof nudge === 'function') nudge(amount); };
-window.nudgeBeats = function(amount) { if(typeof nudge === 'function') nudge(amount * ppq); };
+window.nudgeTicks = function(amount) { nudge(amount); };
+window.nudgeBeats = function(amount) { nudge(amount * ppq); };
+
 window.nudgeSeconds = function(amountSec) {
     if (!currentMidi || document.getElementById('tick-slider').disabled) return;
     let currentTick = parseInt(document.getElementById('tick-slider').value);
@@ -225,15 +232,15 @@ window.nudgeSeconds = function(amountSec) {
     let targetSec = Math.max(0, currentSec + amountSec);
     let targetTick = Math.round(currentMidi.header.secondsToTicks(targetSec));
     let diff = targetTick - currentTick;
-    if(typeof nudge === 'function') nudge(diff);
+    nudge(diff);
 };
 
 // ==========================================
 // 2. CORE EDITOR LOGIC & STATE
 // ==========================================
 let currentMidi = null;
-let fileName = "universal_organ_output";
-let ppq = 384;
+let fileName = "wurlitzer_output";
+let ppq = 384; 
 let minMidiNote = 127;
 let maxMidiNote = 0;
 let isUpdatingSwitches = false; 
@@ -252,41 +259,30 @@ const DEFAULT_PERC_CC = 12;
 
 const DEFAULT_ORGAN_STRUCTURE = {
     "Accompaniment (Ch 2)": [ 
-        { val: 70, name: "Open Flute", visible: true, waveType: "triangle" }, 
-        { val: 11, name: "Stopped Flute", visible: true, waveType: "sine" }, 
-        { val: 48, name: "Strings 8", visible: true, waveType: "sawtooth" } , 
-        { val: 88, name: "Strings 4", visible: true, waveType: "square" }
+        { val: 70, name: "Open Flute", visible: true }, { val: 11, name: "Stopped Flute", visible: true }, { val: 48, name: "Strings 8", visible: true } , { val: 88, name: "Strings 4", visible: true }
     ],
     "Trumpetmelody (Ch 3)": [ 
-        { val: 68, name: "Baritone", visible: true, waveType: "sawtooth" }, 
-        { val: 56, name: "Trumpet", visible: true, waveType: "square" }, 
-        { val: 61, name: "Horn", visible: true, waveType: "square" },
-        { val: 42, name: "Cello", visible: true, waveType: "sawtooth" } 
+        { val: 68, name: "Baritone", visible: true }, { val: 56, name: "Trumpet", visible: true }, { val: 61, name: "Horn", visible: true },
+        { val: 42, name: "Cello", visible: true } 
     ],
     "Countermelody (Ch 4)": [ 
-        { val: 8, name: "Glockenspiel", visible: true, waveType: "sine" }, 
-        { val: 10, name: "Unaphone", visible: true, waveType: "sine" }, 
-        { val: 19, name: "Prestant", visible: true, waveType: "triangle" }, 
-        { val: 20, name: "Celeste", visible: true, waveType: "triangle" }, 
-        { val: 71, name: "Clarinet", visible: true, waveType: "square" }, 
-        { val: 40, name: "Forte Violin", visible: true, waveType: "sawtooth" }, 
-        { val: 73, name: "Piccolo", visible: true, waveType: "triangle" }, 
-        { val: 75, name: "Flageolet", visible: true, waveType: "triangle" }, 
-        { val: 82, name: "Soft Violin", visible: true, waveType: "sawtooth" }, 
-        { val: 83, name: "Tibia", visible: true, waveType: "square" },
-        { val: 86, name: "Bourdon", visible: true, waveType: "square" }, 
-        { val: 87, name: "Flute", visible: true, waveType: "square" }
+        { val: 8, name: "Glockenspiel", visible: true }, { val: 10, name: "Unaphone", visible: true }, { val: 19, name: "Prestant", visible: true }, 
+        { val: 20, name: "Celeste", visible: true }, { val: 71, name: "Clarinet", visible: true }, { val: 40, name: "Forte Violin", visible: true }, 
+        { val: 73, name: "Piccolo", visible: true }, { val: 75, name: "Flageolet", visible: true }, { val: 82, name: "Soft Violin", visible: true }, { val: 83, name: "Tibia", visible: true },
+        { val: 86, name: "Bourdon", visible: true }, { val: 87, name: "Flute", visible: true }
     ],
     "Bass (Ch 4)": [ 
-        { val: 57, name: "Trombone", visible: true, waveType: "square" }, 
-        { val: 50, name: "Tuba", visible: true, waveType: "sawtooth" }, 
-        { val: 58, name: "Bass Flute", visible: true, waveType: "triangle" }
+        { val: 57, name: "Trombone", visible: true }, { val: 50, name: "Tuba", visible: true }, { val: 58, name: "Bass Flute", visible: true }
     ]
 };
 
 const DEFAULT_PISTONS = [
     { name: "Pianissimo", activeStops: [82, 73, 75, 70, 48, 11, 68, 58, 12], swell: 64 }, 
     { name: "Forte", activeStops: [8, 10, 19, 20, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
+    { name: "Piston Default 1", activeStops: [19, 40, 73, 75, 82, 70, 48, 11, 58, 12], swell: 127 }, 
+    { name: "Piston Default 2", activeStops: [71, 40, 73, 75, 82, 68, 42, 70, 48, 11, 50, 58, 12], swell: 127 },
+    { name: "Piston Default 3", activeStops: [19, 20, 71, 40, 73, 75, 82, 68, 56, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 }, 
+    { name: "Piston Default 4", activeStops: [8, 10, 19, 71, 40, 73, 75, 82, 68, 56, 61, 42, 70, 48, 11, 57, 50, 58, 12], swell: 127 },
     { name: "General Cancel", activeStops: [], swell: 64 } 
 ];
 
@@ -1068,95 +1064,3 @@ window.toggleDarkMode = toggleDarkMode;
 window.toggleMidiVals = toggleMidiVals;
 
 buildSettingsUI(); buildEditorUI();
-
-// ==========================================
-// MEMORY & DATA MANAGEMENT
-// ==========================================
-
-window.saveWorkspace = function() {
-    const workspaceState = {
-        organStructure: organStructure,
-        pistons: pistons,
-        swellCC: swellCC,
-        percCC: percCC,
-        settings: {
-            timeDisplayFormat: timeDisplayFormat,
-            isDarkMode: document.documentElement.getAttribute('data-theme') === 'dark',
-            showMidiVals: !document.body.classList.contains('hide-midi-vals')
-        }
-    };
-    localStorage.setItem('OrganMapperWorkspace', JSON.stringify(workspaceState));
-};
-
-window.loadWorkspace = function() {
-    const saved = localStorage.getItem('OrganMapperWorkspace');
-    if (saved) {
-        const workspace = JSON.parse(saved);
-        
-        organStructure = workspace.organStructure || organStructure;
-        pistons = workspace.pistons || pistons;
-        swellCC = workspace.swellCC || swellCC;
-        percCC = workspace.percCC || percCC;
-        
-        if (workspace.settings) {
-            timeDisplayFormat = workspace.settings.timeDisplayFormat || 'ticks';
-            let fmtSelect = document.getElementById('time-format-select');
-            if (fmtSelect) fmtSelect.value = timeDisplayFormat;
-            
-            if (workspace.settings.isDarkMode && typeof toggleDarkMode === 'function') {
-                toggleDarkMode(true);
-                let darkTgl = document.getElementById('dark-mode-toggle');
-                if (darkTgl) darkTgl.checked = true;
-            }
-            
-            if (workspace.settings.showMidiVals && typeof toggleMidiVals === 'function') {
-                toggleMidiVals(true);
-                let midiTgl = document.getElementById('show-midi-toggle');
-                if (midiTgl) midiTgl.checked = true;
-            }
-        }
-    }
-    updateGlobalStopList();
-};
-
-window.exportOrganProfile = function() {
-    const profile = {
-        metadata: { name: "Custom Organ Profile", version: "1.0" },
-        organStructure,
-        pistons,
-        swellCC,
-        percCC
-    };
-    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "MyOrganProfile.json";
-    a.click();
-};
-
-window.importOrganProfile = function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const profile = JSON.parse(e.target.result);
-            organStructure = profile.organStructure || organStructure;
-            pistons = profile.pistons || pistons;
-            swellCC = profile.swellCC || swellCC;
-            percCC = profile.percCC || percCC;
-            
-            updateGlobalStopList();
-            if (typeof buildSettingsUI === "function") buildSettingsUI();
-            if (typeof saveWorkspace === "function") saveWorkspace();
-            alert(`Successfully loaded: ${profile.metadata?.name || "Custom Organ"}`);
-        } catch (err) {
-            alert("Error: Invalid Organ Profile file.");
-        }
-    };
-    reader.readAsText(file);
-};
-
-// Boot up memory when the script loads
-loadWorkspace();
